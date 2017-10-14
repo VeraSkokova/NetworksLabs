@@ -5,6 +5,8 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 public class Client {
+    private static final int BUFFER_SIZE = 1024;
+    private static final int RESPONSE_SIZE = 8;
     private static String filePath;
     private static String serverName;
     private static int serverPort;
@@ -29,7 +31,7 @@ public class Client {
 
             sendFile();
 
-            byte[] response = new byte[8];
+            byte[] response = new byte[RESPONSE_SIZE];
             dataInputStream.readFully(response);
             String message = new String(response, StandardCharsets.UTF_8);
             System.out.println(message);
@@ -55,7 +57,7 @@ public class Client {
         dataOutputStream.writeBytes(fileName);
         FileInputStream fileInputStream = new FileInputStream(file);
         int read;
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[BUFFER_SIZE];
         while ((read = fileInputStream.read(buffer, 0, buffer.length)) > 0) {
             dataOutputStream.write(buffer, 0, read);
             dataOutputStream.flush();

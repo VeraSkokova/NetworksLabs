@@ -13,22 +13,13 @@ public class Server {
     private static int serverPort;
     private Thread acceptor;
 
-    private boolean isWorking;
-
     public static void main(String[] args) {
         serverPort = Integer.parseInt(args[0]);
-        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(System.in))) {
-            Server server = new Server();
-            server.start();
-            while (bufferedReader.readLine().compareTo("stop") != 0) ;
-            server.stop();
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
+        Server server = new Server();
+        server.start();
     }
 
     private void start() {
-        isWorking = true;
         File uploadsDirectory = new File(DIR_NAME);
         if (!uploadsDirectory.exists()) {
             uploadsDirectory.mkdir();
@@ -37,14 +28,10 @@ public class Server {
         acceptor.start();
     }
 
-    private void stop() {
-        isWorking = false;
-    }
-
     class AcceptorRunnable implements Runnable {
         @Override
         public void run() {
-            ServerSocket serverSocket = null;
+            ServerSocket serverSocket;
             try {
                 serverSocket = new ServerSocket(serverPort);
                 while (!Thread.interrupted()) {
@@ -94,7 +81,7 @@ class ConnectedClient {
                 int fileNameSize = dataInputStream.readInt();
                 System.out.println("FileNameSize: " + fileNameSize);
 
-                int read = 0;
+                int read;
                 byte[] stringBuffer = new byte[fileNameSize];
                 dataInputStream.read(stringBuffer, 0, fileNameSize);
                 String fileName = new String(stringBuffer, StandardCharsets.UTF_8);
