@@ -10,4 +10,9 @@ public class AckMessage implements Message {
     public AckMessage deserialize(byte[] bytes) {
         return null;
     }
+
+    @Override
+    public void process() {
+
+    }
 }

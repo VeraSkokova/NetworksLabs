@@ -10,4 +10,9 @@ public class TextMessage implements Message {
     public TextMessage deserialize(byte[] bytes) {
         return null;
     }
+
+    @Override
+    public void process() {
+
+    }
 }

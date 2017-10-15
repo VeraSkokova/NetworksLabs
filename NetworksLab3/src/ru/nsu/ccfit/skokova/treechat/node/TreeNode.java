@@ -1,30 +1,39 @@
 package ru.nsu.ccfit.skokova.treechat.node;
 
+import ru.nsu.ccfit.skokova.treechat.messages.JoinMessage;
+import ru.nsu.ccfit.skokova.treechat.messages.Message;
+import ru.nsu.ccfit.skokova.treechat.messages.MessageCreator;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class TreeNode {
     private static final int BUF_SIZE = 2048;
     private static final int QUEUE_SIZE = 100;
-    private ArrayList<DatagramSocket> childrenSockets = new ArrayList<>();
+    private ArrayList<InetSocketAddress> neighbourAddresses = new ArrayList<>();
     private DatagramSocket socket;
     private String name;
     private int percentageLoss;
     private int port;
     private String parentAddress;
     private int parentPort;
+    private boolean isRoot;
     private Thread inThread;
     private Thread outThread;
-    private ArrayBlockingQueue<Object> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private ArrayBlockingQueue<Message> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
 
     public TreeNode(String name, int percentageLoss, int port) {
         this.name = name;
         this.percentageLoss = percentageLoss;
         this.port = port;
+        this.isRoot = true;
     }
 
     public TreeNode(String name, int percentageLoss, int port, String parentAddress, int parentPort) {
@@ -40,8 +49,19 @@ public class TreeNode {
             outThread = new Thread(new Sender());
             inThread.start();
             outThread.start();
+            joinChat();
         } catch (SocketException e) {
             System.out.println(e.getMessage());
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void joinChat() throws SocketException, InterruptedException {
+        if (!isRoot) {
+            neighbourAddresses.add(new InetSocketAddress(parentAddress, parentPort));
+            messagesToSend.put(new JoinMessage());
         }
     }
 
@@ -51,11 +71,22 @@ public class TreeNode {
         public void run() {
             while (!Thread.interrupted()) {
                 try {
-                    Object message = messagesToSend.take();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Message message = messagesToSend.take();
+                    byte[] messageBytes = message.serialize();
+                    for (InetSocketAddress inetSocketAddress : neighbourAddresses) {
+                        if (!isAuthor()) {
+                            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress.getAddress(), inetSocketAddress.getPort());
+                            socket.send(datagramPacket);
+                        }
+                    }
+                } catch (InterruptedException | IOException e) {
+                    System.out.println(e.getMessage());
                 }
             }
+        }
+
+        private boolean isAuthor() {
+            return false;
         }
     }
 
@@ -68,8 +99,14 @@ public class TreeNode {
             while (!Thread.interrupted()) {
                 try {
                     socket.receive(datagramPacket);
+                    ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOfRange(datagramPacket.getData(), 0, 3));
+                    int messageType = byteBuffer.getInt();
+                    Message message = (Message) MessageCreator.getClassByIndex(messageType).newInstance();
+                    message.process();
                 } catch (IOException e) {
                     System.out.println(e.getMessage());
+                } catch (IllegalAccessException | InstantiationException e) {
+                    e.printStackTrace();
                 }
             }
         }

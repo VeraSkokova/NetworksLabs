@@ -10,4 +10,9 @@ public class JoinMessage implements Message {
     public JoinMessage deserialize(byte[] bytes) {
         return null;
     }
+
+    @Override
+    public void process() {
+
+    }
 }

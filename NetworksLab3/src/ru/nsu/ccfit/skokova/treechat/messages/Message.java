@@ -4,4 +4,6 @@ public interface Message {
     byte[] serialize();
 
     Message deserialize(byte[] bytes);
+
+    void process();
 }

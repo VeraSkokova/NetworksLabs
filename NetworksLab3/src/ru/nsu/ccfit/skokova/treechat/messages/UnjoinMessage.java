@@ -10,4 +10,9 @@ public class UnjoinMessage implements Message {
     public UnjoinMessage deserialize(byte[] bytes) {
         return null;
     }
+
+    @Override
+    public void process() {
+
+    }
 }

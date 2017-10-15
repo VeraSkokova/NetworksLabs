@@ -10,4 +10,9 @@ public class NewParentMessage implements Message {
     public NewParentMessage deserialize(byte[] bytes) {
         return null;
     }
+
+    @Override
+    public void process() {
+
+    }
 }
