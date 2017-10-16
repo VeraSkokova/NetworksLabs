@@ -1,9 +1,18 @@
 package ru.nsu.ccfit.skokova.treechat.messages;
 
-public interface Message {
-    byte[] serialize();
+import ru.nsu.ccfit.skokova.treechat.node.TreeNode;
 
-    Message deserialize(byte[] bytes);
+import java.io.Serializable;
+import java.util.UUID;
 
-    void process();
+public interface Message extends Serializable {
+    /*byte[] serialize() throws IOException;
+
+    Message deserialize(byte[] bytes) throws IOException, ClassNotFoundException;*/
+
+    void process(TreeNode treeNode);
+
+    UUID getUUID();
+
+    void setUUID(UUID uuid);
 }

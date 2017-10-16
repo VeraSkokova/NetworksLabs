@@ -2,7 +2,7 @@ package ru.nsu.ccfit.skokova.treechat.node;
 
 import ru.nsu.ccfit.skokova.treechat.messages.JoinMessage;
 import ru.nsu.ccfit.skokova.treechat.messages.Message;
-import ru.nsu.ccfit.skokova.treechat.messages.MessageCreator;
+import ru.nsu.ccfit.skokova.treechat.serialization.Serializer;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -58,6 +58,18 @@ public class TreeNode {
         }
     }
 
+    public ArrayList<InetSocketAddress> getNeighbourAddresses() {
+        return neighbourAddresses;
+    }
+
+    public ArrayBlockingQueue<Message> getMessagesToSend() {
+        return messagesToSend;
+    }
+
+    public String getName() {
+        return name;
+    }
+
     private void joinChat() throws SocketException, InterruptedException {
         if (!isRoot) {
             neighbourAddresses.add(new InetSocketAddress(parentAddress, parentPort));
@@ -72,7 +84,7 @@ public class TreeNode {
             while (!Thread.interrupted()) {
                 try {
                     Message message = messagesToSend.take();
-                    byte[] messageBytes = message.serialize();
+                    byte[] messageBytes = Serializer.serialize(message);
                     for (InetSocketAddress inetSocketAddress : neighbourAddresses) {
                         if (!isAuthor()) {
                             DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress.getAddress(), inetSocketAddress.getPort());
@@ -100,13 +112,12 @@ public class TreeNode {
                 try {
                     socket.receive(datagramPacket);
                     ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOfRange(datagramPacket.getData(), 0, 3));
-                    int messageType = byteBuffer.getInt();
-                    Message message = (Message) MessageCreator.getClassByIndex(messageType).newInstance();
-                    message.process();
-                } catch (IOException e) {
+                    //int messageType = byteBuffer.getInt();
+                    //Message message = (Message) MessageCreator.getClassByIndex(messageType).newInstance();
+                    Message message = Serializer.deserialize(datagramPacket.getData());
+                    message.process(TreeNode.this);
+                } catch (IOException | ClassNotFoundException e) {
                     System.out.println(e.getMessage());
-                } catch (IllegalAccessException | InstantiationException e) {
-                    e.printStackTrace();
                 }
             }
         }
