@@ -7,11 +7,9 @@ import java.util.UUID;
 
 public class AckMessage extends Message {
     public AckMessage() {
-        this.isA = AckMessage.class.getCanonicalName();
     }
 
     public AckMessage(UUID uuid, InetSocketAddress inetSocketAddress) {
-        this();
         this.uuid = uuid;
         this.senderInetSocketAddress = inetSocketAddress;
     }

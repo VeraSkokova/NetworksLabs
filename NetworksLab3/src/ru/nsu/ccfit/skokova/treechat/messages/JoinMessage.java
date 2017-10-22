@@ -8,14 +8,12 @@ import java.util.UUID;
 
 public class JoinMessage extends Message {
     public JoinMessage() {
-        this.isA = JoinMessage.class.getCanonicalName();
         this.uuid = UUID.randomUUID();
     }
 
     public JoinMessage(InetSocketAddress inetSocketAddress) {
         super(inetSocketAddress);
         this.uuid = UUID.randomUUID();
-        this.isA = JoinMessage.class.getCanonicalName();
     }
 
     @Override

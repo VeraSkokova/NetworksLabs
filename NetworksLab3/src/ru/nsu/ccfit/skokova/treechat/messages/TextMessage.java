@@ -11,11 +11,9 @@ public class TextMessage extends Message {
     private String text;
 
     public TextMessage() {
-        this.isA = TextMessage.class.getCanonicalName();
     }
 
     public TextMessage(UUID uuid, String author, String text, InetSocketAddress inetSocketAddress) {
-        this();
         this.uuid = uuid;
         this.author = author;
         this.text = text;

@@ -10,7 +10,6 @@ public class NewParentMessage extends Message {
     private InetSocketAddress newParentInetSocketAddress;
 
     public NewParentMessage() {
-        this.isA = NewParentMessage.class.getCanonicalName();
     }
 
     public NewParentMessage(InetSocketAddress inetSocketAddress, InetSocketAddress newParentInetSocketAddress) {

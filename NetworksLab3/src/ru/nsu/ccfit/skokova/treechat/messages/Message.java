@@ -8,7 +8,8 @@ import java.util.UUID;
 
 public abstract class Message implements Serializable {
     protected UUID uuid;
-    protected String isA;
+    protected final int MAX_ATTEMPTS = 5;
+    protected int attempts = MAX_ATTEMPTS;
 
     protected InetSocketAddress senderInetSocketAddress;
 
@@ -31,5 +32,13 @@ public abstract class Message implements Serializable {
 
     public InetSocketAddress getSenderInetSocketAddress() {
         return senderInetSocketAddress;
+    }
+
+    public int getAttempts() {
+        return attempts;
+    }
+
+    public void decAttempts() {
+        this.attempts--;
     }
 }

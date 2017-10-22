@@ -1,8 +1,6 @@
 package ru.nsu.ccfit.skokova.treechat.node;
 
-import ru.nsu.ccfit.skokova.treechat.messages.JoinMessage;
-import ru.nsu.ccfit.skokova.treechat.messages.Message;
-import ru.nsu.ccfit.skokova.treechat.messages.TextMessage;
+import ru.nsu.ccfit.skokova.treechat.messages.*;
 import ru.nsu.ccfit.skokova.treechat.serialization.Serializer;
 
 import java.io.IOException;
@@ -18,7 +16,6 @@ import java.util.concurrent.ThreadLocalRandom;
 public class TreeNode {
     private static final int BUF_SIZE = 2048;
     private static final int QUEUE_SIZE = 100;
-    private static final Object lock = new Object();
     private DatagramSocket socket;
     private String name;
     private int percentageLoss;
@@ -53,6 +50,8 @@ public class TreeNode {
             outThread = new Thread(new Sender());
             scannerThread = new Thread(new MessageScanner());
 
+            addDisconnectionHandler();
+
             inThread.start();
             outThread.start();
             scannerThread.start();
@@ -63,6 +62,31 @@ public class TreeNode {
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private void addDisconnectionHandler() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (parentInetSocketAddress != null) {
+                    sendDirectMessage(new UnjoinMessage(), parentInetSocketAddress);
+                }
+                if (!neighbourAddresses.isEmpty()) {
+                    takeCareOfChildren();
+                }
+            } catch (IOException e) {
+                System.out.println(e.getMessage());
+            } catch (InterruptedException e) {
+                System.out.println("Interrupted");
+            }
+        }));
+    }
+
+    private void takeCareOfChildren() throws IOException, InterruptedException {
+        if (parentInetSocketAddress != null) {
+            sendMessage(new NewParentMessage(myInetSocketAddress, parentInetSocketAddress), parentInetSocketAddress);
+        } else {
+            sendMessage(new NewParentMessage(myInetSocketAddress, neighbourAddresses.get(0)));
         }
     }
 
