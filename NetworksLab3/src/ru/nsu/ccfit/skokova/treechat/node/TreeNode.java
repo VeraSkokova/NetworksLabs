@@ -2,55 +2,63 @@ package ru.nsu.ccfit.skokova.treechat.node;
 
 import ru.nsu.ccfit.skokova.treechat.messages.JoinMessage;
 import ru.nsu.ccfit.skokova.treechat.messages.Message;
+import ru.nsu.ccfit.skokova.treechat.messages.TextMessage;
 import ru.nsu.ccfit.skokova.treechat.serialization.Serializer;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Scanner;
+import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class TreeNode {
     private static final int BUF_SIZE = 2048;
     private static final int QUEUE_SIZE = 100;
-    private ArrayList<InetSocketAddress> neighbourAddresses = new ArrayList<>();
+    private static final Object lock = new Object();
     private DatagramSocket socket;
     private String name;
     private int percentageLoss;
-    private int port;
-    private String parentAddress;
-    private int parentPort;
+    private CopyOnWriteArrayList<InetSocketAddress> neighbourAddresses = new CopyOnWriteArrayList<>();
+    private InetSocketAddress myInetSocketAddress;
     private boolean isRoot;
     private Thread inThread;
     private Thread outThread;
-    private ArrayBlockingQueue<Message> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private InetSocketAddress parentInetSocketAddress;
+    private Thread scannerThread;
+    private ArrayBlockingQueue<DatagramPacket> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private CopyOnWriteArrayList<UUID> sentMessages = new CopyOnWriteArrayList<>();
 
-    public TreeNode(String name, int percentageLoss, int port) {
+    public TreeNode(String name, int percentageLoss, String address, int port) {
         this.name = name;
         this.percentageLoss = percentageLoss;
-        this.port = port;
+        this.myInetSocketAddress = new InetSocketAddress(address, port);
         this.isRoot = true;
     }
 
-    public TreeNode(String name, int percentageLoss, int port, String parentAddress, int parentPort) {
-        this(name, percentageLoss, port);
-        this.parentAddress = parentAddress;
-        this.parentPort = parentPort;
+    public TreeNode(String name, int percentageLoss, int port, String address, String parentAddress, int parentPort) {
+        this(name, percentageLoss, address, port);
+        this.parentInetSocketAddress = new InetSocketAddress(parentAddress, parentPort);
+        this.isRoot = false;
     }
 
     public void start() {
         try {
-            socket = new DatagramSocket(port);
+            System.out.println(name + " started");
+            socket = new DatagramSocket(myInetSocketAddress.getPort());
             inThread = new Thread(new Receiver());
             outThread = new Thread(new Sender());
+            scannerThread = new Thread(new MessageScanner());
+
             inThread.start();
             outThread.start();
+            scannerThread.start();
+
             joinChat();
-        } catch (SocketException e) {
+        } catch (IOException e) {
             System.out.println(e.getMessage());
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
@@ -58,11 +66,11 @@ public class TreeNode {
         }
     }
 
-    public ArrayList<InetSocketAddress> getNeighbourAddresses() {
+    public CopyOnWriteArrayList<InetSocketAddress> getNeighbourAddresses() {
         return neighbourAddresses;
     }
 
-    public ArrayBlockingQueue<Message> getMessagesToSend() {
+    public ArrayBlockingQueue<DatagramPacket> getMessagesToSend() {
         return messagesToSend;
     }
 
@@ -70,11 +78,63 @@ public class TreeNode {
         return name;
     }
 
-    private void joinChat() throws SocketException, InterruptedException {
+    public InetSocketAddress getMyInetSocketAddress() {
+        return myInetSocketAddress;
+    }
+
+    public void setRoot(boolean root) {
+        isRoot = root;
+    }
+
+    public InetSocketAddress getParentInetSocketAddress() {
+        return parentInetSocketAddress;
+    }
+
+    public void setParentInetSocketAddress(InetSocketAddress parentInetSocketAddress) {
+        this.parentInetSocketAddress = parentInetSocketAddress;
+    }
+
+    public CopyOnWriteArrayList<UUID> getSentMessages() {
+        return sentMessages;
+    }
+
+    private void joinChat() throws IOException, InterruptedException {
         if (!isRoot) {
-            neighbourAddresses.add(new InetSocketAddress(parentAddress, parentPort));
-            messagesToSend.put(new JoinMessage());
+            neighbourAddresses.add(parentInetSocketAddress);
+            sendMessage(new JoinMessage(myInetSocketAddress));
+            System.out.println("Connected to parent");
         }
+        System.out.println(name + " joined chat");
+    }
+
+    public void sendMessage(Message message) throws IOException, InterruptedException {
+        byte[] messageBytes = Serializer.serialize(message);
+        for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
+            if (!isAuthor(inetSocketAddress, message)) {
+                getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress));
+            }
+        }
+        sentMessages.add(message.getUUID());
+    }
+
+    public void sendMessage(Message message, InetSocketAddress previousAuthor) throws IOException, InterruptedException {
+        byte[] messageBytes = Serializer.serialize(message);
+        for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
+            if ((!isAuthor(inetSocketAddress, message)) && (!inetSocketAddress.equals(previousAuthor))) {
+                getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress));
+            }
+        }
+        sentMessages.add(message.getUUID());
+    }
+
+    public void sendDirectMessage(Message message, InetSocketAddress receiver) throws IOException, InterruptedException {
+        byte[] messageBytes = Serializer.serialize(message);
+        getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, receiver));
+        sentMessages.add(message.getUUID());
+    }
+
+    private boolean isAuthor(InetSocketAddress inetSocketAddress, Message message) {
+        return (message.getSenderInetSocketAddress().equals(inetSocketAddress));
     }
 
     class Sender implements Runnable {
@@ -83,22 +143,12 @@ public class TreeNode {
         public void run() {
             while (!Thread.interrupted()) {
                 try {
-                    Message message = messagesToSend.take();
-                    byte[] messageBytes = Serializer.serialize(message);
-                    for (InetSocketAddress inetSocketAddress : neighbourAddresses) {
-                        if (!isAuthor()) {
-                            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress.getAddress(), inetSocketAddress.getPort());
-                            socket.send(datagramPacket);
-                        }
-                    }
+                    DatagramPacket message = messagesToSend.take();
+                    socket.send(message);
                 } catch (InterruptedException | IOException e) {
                     System.out.println(e.getMessage());
                 }
             }
-        }
-
-        private boolean isAuthor() {
-            return false;
         }
     }
 
@@ -111,12 +161,36 @@ public class TreeNode {
             while (!Thread.interrupted()) {
                 try {
                     socket.receive(datagramPacket);
-                    ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOfRange(datagramPacket.getData(), 0, 3));
-                    //int messageType = byteBuffer.getInt();
-                    //Message message = (Message) MessageCreator.getClassByIndex(messageType).newInstance();
-                    Message message = Serializer.deserialize(datagramPacket.getData());
-                    message.process(TreeNode.this);
+                    if (!isLost()) {
+                        Message message = Serializer.deserialize(datagramPacket.getData());
+                        //System.out.println("Received " + message);
+                        message.process(TreeNode.this);
+                    }
                 } catch (IOException | ClassNotFoundException e) {
+                    System.out.println(e.getMessage());
+                }
+            }
+        }
+
+        private boolean isLost() {
+            int randomInt = ThreadLocalRandom.current().nextInt(0, 100);
+            return randomInt < percentageLoss;
+        }
+    }
+
+    class MessageScanner implements Runnable {
+
+        @Override
+        public void run() {
+            Scanner scanner = new Scanner(System.in);
+            while (!Thread.interrupted()) {
+                System.out.print("> ");
+                String message = scanner.nextLine();
+                try {
+                    sendMessage(new TextMessage(UUID.randomUUID(), name, message, myInetSocketAddress));
+                } catch (InterruptedException e) {
+                    System.out.println("Interrupted");
+                } catch (IOException e) {
                     System.out.println(e.getMessage());
                 }
             }

@@ -68,7 +68,7 @@ class ConnectedClient {
     }
 
     class Handler implements Runnable {
-        private int totalRead = 0;
+        private long totalRead = 0;
 
         @Override
         public void run() {
@@ -83,7 +83,10 @@ class ConnectedClient {
 
                 int read;
                 byte[] stringBuffer = new byte[fileNameSize];
-                dataInputStream.read(stringBuffer, 0, fileNameSize);
+                int totalFileNameRead = 0;
+                while (totalFileNameRead < fileNameSize) {
+                    totalFileNameRead += dataInputStream.read(stringBuffer, totalFileNameRead, fileNameSize - totalFileNameRead);
+                }
                 String fileName = new String(stringBuffer, StandardCharsets.UTF_8);
 
                 File tempFile = new File(fileName);
@@ -98,10 +101,12 @@ class ConnectedClient {
                 try (OutputStream outputStream = new FileOutputStream(file)) {
                     byte[] buffer = new byte[BUF_SIZE];
 
-                    while ((totalRead < fileSize) && ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
-                        outputStream.write(buffer, 0, read);
-                        totalRead += read;
-                        outputStream.flush();
+                    synchronized (this) {
+                        while ((totalRead < fileSize) && ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
+                            outputStream.write(buffer, 0, read);
+                            totalRead += read;
+                            outputStream.flush();
+                        }
                     }
 
                     String response;
@@ -125,7 +130,7 @@ class ConnectedClient {
             }
         }
 
-        int getTotalRead() {
+        synchronized long getTotalRead() {
             return totalRead;
         }
     }
@@ -133,24 +138,27 @@ class ConnectedClient {
 
 class SpeedMeter extends TimerTask {
     private long startTime;
-    private int previouslyRead;
+    private long previousTime;
+    private long previouslyRead;
     private ConnectedClient.Handler handler;
 
     SpeedMeter(ConnectedClient.Handler handler) {
         this.startTime = System.currentTimeMillis();
         this.handler = handler;
+        this.previousTime = this.startTime;
     }
 
     @Override
     public void run() {
-        int totalRead = handler.getTotalRead();
+        long totalRead = handler.getTotalRead();
         if (totalRead != 0) {
             long currentTime = System.currentTimeMillis();
-            double instantaneousSpeed = (1.0 * totalRead - previouslyRead) / (currentTime - startTime);
+            double instantaneousSpeed = (1.0 * totalRead - previouslyRead) / (currentTime - previousTime);
             System.out.println("Instantaneous speed: " + instantaneousSpeed);
             double averageSpeed = 1.0 * totalRead / (currentTime - startTime);
             System.out.println("Average Speed: " + averageSpeed);
             previouslyRead = totalRead;
+            previousTime = currentTime;
         }
     }
 }

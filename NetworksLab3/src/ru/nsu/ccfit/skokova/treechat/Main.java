@@ -3,21 +3,25 @@ package ru.nsu.ccfit.skokova.treechat;
 import ru.nsu.ccfit.skokova.treechat.node.TreeNode;
 
 public class Main {
-    private static final int SIMPLE_ARGS_SIZE = 3;
-    private static final int ROOT_ARGS_SIZE = 5;
+    private static final int SIMPLE_ARGS_SIZE = 4;
+    private static final int ROOT_ARGS_SIZE = 6;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) {/*
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.registerTypeAdapter(Message.class, new MessageDeserializer());
+*/
         TreeNode treeNode = null;
         if (args.length >= SIMPLE_ARGS_SIZE) {
             String nodeName = args[0];
             int percentageLoss = Integer.parseInt(args[1]);
-            int port = Integer.parseInt(args[2]);
+            String address = args[2];
+            int port = Integer.parseInt(args[3]);
             if (args.length == ROOT_ARGS_SIZE) {
-                String parentAddress = args[3];
-                int parentPort = Integer.parseInt(args[4]);
-                treeNode = new TreeNode(nodeName, percentageLoss, port, parentAddress, parentPort);
+                String parentAddress = args[4];
+                int parentPort = Integer.parseInt(args[5]);
+                treeNode = new TreeNode(nodeName, percentageLoss, port, address, parentAddress, parentPort);
             } else if (args.length == SIMPLE_ARGS_SIZE) {
-                treeNode = new TreeNode(nodeName, percentageLoss, port);
+                treeNode = new TreeNode(nodeName, percentageLoss, address, port);
             } else {
                 System.out.println("Invalid arguments size");
                 System.exit(1);
