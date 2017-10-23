@@ -20,14 +20,20 @@ public class NewParentMessage extends Message {
 
     @Override
     public void process(TreeNode treeNode) throws IOException, InterruptedException {
+        //System.out.println("Got NewParent message");
         super.process(treeNode);
+        treeNode.getNeighbourAddresses().remove(treeNode.getParentInetSocketAddress());
         if (newParentInetSocketAddress.equals(treeNode.getMyInetSocketAddress())) {
+            //System.out.println("I'm new root");
             treeNode.setRoot(true);
             treeNode.setParentInetSocketAddress(null);
+            treeNode.sendDirectMessage(new AckMessage(uuid, senderInetSocketAddress), senderInetSocketAddress);
         } else {
+            //System.out.println("My new parent is " + newParentInetSocketAddress);
             treeNode.setParentInetSocketAddress(newParentInetSocketAddress);
             JoinMessage joinMessage = new JoinMessage(treeNode.getMyInetSocketAddress());
             try {
+                //System.out.println("Send new JoinMessage");
                 treeNode.sendDirectMessage(joinMessage, newParentInetSocketAddress);
                 treeNode.sendDirectMessage(new AckMessage(uuid, senderInetSocketAddress), senderInetSocketAddress);
             } catch (InterruptedException e) {

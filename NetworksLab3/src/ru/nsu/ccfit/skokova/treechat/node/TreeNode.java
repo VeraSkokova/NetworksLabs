@@ -71,10 +71,14 @@ public class TreeNode {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
                 if (parentInetSocketAddress != null) {
-                    sendDirectMessage(new UnjoinMessage(), parentInetSocketAddress);
+                    System.out.println("Sending unjoin to " + parentInetSocketAddress);
+                    sendDirectMessage(new UnjoinMessage(myInetSocketAddress), parentInetSocketAddress);
                 }
                 if (!neighbourAddresses.isEmpty()) {
                     takeCareOfChildren();
+                }
+                while (!messagesToSend.isEmpty()) {
+                    Thread.sleep(1000);
                 }
             } catch (IOException e) {
                 System.out.println(e.getMessage());
@@ -86,8 +90,10 @@ public class TreeNode {
 
     private void takeCareOfChildren() throws IOException, InterruptedException {
         if (parentInetSocketAddress != null) {
+            //System.out.println("I have a parent");
             sendMessage(new NewParentMessage(myInetSocketAddress, parentInetSocketAddress), parentInetSocketAddress);
         } else {
+            //System.out.println("I don't have a parent");
             sendMessage(new NewParentMessage(myInetSocketAddress, neighbourAddresses.get(0)));
         }
     }
@@ -150,7 +156,7 @@ public class TreeNode {
         byte[] messageBytes = Serializer.serialize(message);
         for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
             if ((!isAuthor(inetSocketAddress, message)) && (!inetSocketAddress.equals(previousAuthor))) {
-                System.out.println("Added to sender");
+                //System.out.println("Added to sender " + message.getClass().getSimpleName() + " to " + inetSocketAddress);
                 addToSender(new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress)));
             }
         }
@@ -161,6 +167,7 @@ public class TreeNode {
 
     public void sendDirectMessage(Message message, InetSocketAddress receiver) throws IOException, InterruptedException {
         byte[] messageBytes = Serializer.serialize(message);
+        //System.out.println("Receiver is " + receiver);
         PacketWrapper packetWrapper = new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, receiver));
         if (message.getClass().getSimpleName().equals("AckMessage")) {
             packetWrapper.setAck(true);
@@ -257,7 +264,6 @@ public class TreeNode {
         public void run() {
             Scanner scanner = new Scanner(System.in);
             while (!Thread.interrupted()) {
-                System.out.print("> ");
                 String message = scanner.nextLine();
                 try {
                     sendMessage(new TextMessage(UUID.randomUUID(), name, message, myInetSocketAddress));
