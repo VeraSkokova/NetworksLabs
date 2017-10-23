@@ -1,5 +1,6 @@
 package ru.nsu.ccfit.skokova.treechat.messages;
 
+import ru.nsu.ccfit.skokova.treechat.PacketWrapper;
 import ru.nsu.ccfit.skokova.treechat.node.TreeNode;
 
 import java.net.InetSocketAddress;
@@ -19,6 +20,9 @@ public class AckMessage extends Message {
         System.out.println("Received AckMessage");
         if (treeNode.getSentMessages().contains(uuid)) {
             treeNode.getSentMessages().remove(uuid);
+        }
+        if (treeNode.getMessagesToSend().contains(new PacketWrapper(uuid))) {
+            treeNode.getMessagesToSend().remove(new PacketWrapper(uuid));
         }
     }
 

@@ -1,5 +1,6 @@
 package ru.nsu.ccfit.skokova.treechat.node;
 
+import ru.nsu.ccfit.skokova.treechat.PacketWrapper;
 import ru.nsu.ccfit.skokova.treechat.messages.*;
 import ru.nsu.ccfit.skokova.treechat.serialization.Serializer;
 
@@ -9,7 +10,6 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.util.Scanner;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -26,8 +26,9 @@ public class TreeNode {
     private Thread outThread;
     private InetSocketAddress parentInetSocketAddress;
     private Thread scannerThread;
-    private ArrayBlockingQueue<DatagramPacket> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private CopyOnWriteArrayList<PacketWrapper> messagesToSend = new CopyOnWriteArrayList<>();
     private CopyOnWriteArrayList<UUID> sentMessages = new CopyOnWriteArrayList<>();
+    private CopyOnWriteArrayList<Message> messageHistory = new CopyOnWriteArrayList<>();
 
     public TreeNode(String name, int percentageLoss, String address, int port) {
         this.name = name;
@@ -94,7 +95,7 @@ public class TreeNode {
         return neighbourAddresses;
     }
 
-    public ArrayBlockingQueue<DatagramPacket> getMessagesToSend() {
+    public CopyOnWriteArrayList<PacketWrapper> getMessagesToSend() {
         return messagesToSend;
     }
 
@@ -135,30 +136,51 @@ public class TreeNode {
         byte[] messageBytes = Serializer.serialize(message);
         for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
             if (!isAuthor(inetSocketAddress, message)) {
-                getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress));
+                addToSender(new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress)));
             }
         }
         sentMessages.add(message.getUUID());
+        addToHistory(message);
     }
 
     public void sendMessage(Message message, InetSocketAddress previousAuthor) throws IOException, InterruptedException {
         byte[] messageBytes = Serializer.serialize(message);
         for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
             if ((!isAuthor(inetSocketAddress, message)) && (!inetSocketAddress.equals(previousAuthor))) {
-                getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress));
+                addToSender(new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress)));
             }
         }
         sentMessages.add(message.getUUID());
+        addToHistory(message);
+
     }
 
     public void sendDirectMessage(Message message, InetSocketAddress receiver) throws IOException, InterruptedException {
         byte[] messageBytes = Serializer.serialize(message);
-        getMessagesToSend().put(new DatagramPacket(messageBytes, messageBytes.length, receiver));
+        PacketWrapper packetWrapper = new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, receiver));
+        if (message.getClass().getSimpleName().equals("AckMessage")) {
+            packetWrapper.setAck(true);
+        }
+        addToSender(packetWrapper);
         sentMessages.add(message.getUUID());
+        addToHistory(message);
+
     }
 
     private boolean isAuthor(InetSocketAddress inetSocketAddress, Message message) {
         return (message.getSenderInetSocketAddress().equals(inetSocketAddress));
+    }
+
+    private void addToHistory(Message message) {
+        if (!messageHistory.contains(message)) {
+            messageHistory.add(message);
+        }
+    }
+
+    private void addToSender(PacketWrapper packetWrapper) {
+        if (!messagesToSend.contains(packetWrapper)) {
+            messagesToSend.add(packetWrapper);
+        }
     }
 
     class Sender implements Runnable {
@@ -167,10 +189,24 @@ public class TreeNode {
         public void run() {
             while (!Thread.interrupted()) {
                 try {
-                    DatagramPacket message = messagesToSend.take();
-                    socket.send(message);
-                } catch (InterruptedException | IOException e) {
+                    if (!messagesToSend.isEmpty()) {
+                        PacketWrapper packetWrapper = messagesToSend.get(0);
+                        long currentTime = System.currentTimeMillis();
+                        if (currentTime - packetWrapper.getLastAttempt() > PacketWrapper.DIFF) {
+                            DatagramPacket message = packetWrapper.getDatagramPacket();
+                            socket.send(message);
+                            messagesToSend.get(0).setLastAttempt(currentTime);
+                            if (packetWrapper.isAck()) {
+                                messagesToSend.remove(packetWrapper);
+                            }
+                        } else {
+                            Thread.sleep(currentTime - packetWrapper.getLastAttempt());
+                        }
+                    }
+                } catch (IOException e) {
                     System.out.println(e.getMessage());
+                } catch (InterruptedException e) {
+                    System.out.println("Interrupted");
                 }
             }
         }
@@ -187,8 +223,10 @@ public class TreeNode {
                     socket.receive(datagramPacket);
                     if (!isLost()) {
                         Message message = Serializer.deserialize(datagramPacket.getData());
-                        //System.out.println("Received " + message);
-                        message.process(TreeNode.this);
+                        if (!messageHistory.contains(message)) {
+                            //System.out.println("Received " + message);
+                            message.process(TreeNode.this);
+                        }
                     }
                 } catch (IOException | ClassNotFoundException e) {
                     System.out.println(e.getMessage());
