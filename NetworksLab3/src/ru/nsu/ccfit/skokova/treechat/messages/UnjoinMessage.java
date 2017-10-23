@@ -13,13 +13,6 @@ public class UnjoinMessage extends Message {
         if (treeNode.getNeighbourAddresses().contains(senderInetSocketAddress)) {
             treeNode.getNeighbourAddresses().remove(senderInetSocketAddress);
         }
-        /*try {
-            treeNode.sendDirectMessage(new AckMessage(uuid, senderInetSocketAddress), senderInetSocketAddress);
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
-        } catch (InterruptedException e) {
-            System.out.println("Interrupted");
-        }*/
     }
 
     @Override

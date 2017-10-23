@@ -17,12 +17,13 @@ public class JoinMessage extends Message {
     }
 
     @Override
-    public void process(TreeNode treeNode) {
+    public void process(TreeNode treeNode) throws IOException, InterruptedException {
+        super.process(treeNode);
         System.out.println("Received JoinMessage from " + senderInetSocketAddress);
         if (!treeNode.getNeighbourAddresses().contains(senderInetSocketAddress)) {
             treeNode.getNeighbourAddresses().add(senderInetSocketAddress);
+            System.out.println("Added new child to " + treeNode.getName());
         }
-        System.out.println("Added new child to " + treeNode.getName());
         AckMessage ackMessage = new AckMessage(uuid, treeNode.getMyInetSocketAddress());
         try {
             treeNode.sendDirectMessage(ackMessage, senderInetSocketAddress);

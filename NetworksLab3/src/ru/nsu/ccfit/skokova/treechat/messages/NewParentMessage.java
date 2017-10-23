@@ -14,11 +14,13 @@ public class NewParentMessage extends Message {
 
     public NewParentMessage(InetSocketAddress inetSocketAddress, InetSocketAddress newParentInetSocketAddress) {
         super(inetSocketAddress);
+        this.uuid = UUID.randomUUID();
         this.newParentInetSocketAddress = newParentInetSocketAddress;
     }
 
     @Override
-    public void process(TreeNode treeNode) {
+    public void process(TreeNode treeNode) throws IOException, InterruptedException {
+        super.process(treeNode);
         if (newParentInetSocketAddress.equals(treeNode.getMyInetSocketAddress())) {
             treeNode.setRoot(true);
             treeNode.setParentInetSocketAddress(null);

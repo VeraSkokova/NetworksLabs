@@ -2,6 +2,7 @@ package ru.nsu.ccfit.skokova.treechat.messages;
 
 import ru.nsu.ccfit.skokova.treechat.node.TreeNode;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.util.UUID;
@@ -18,7 +19,11 @@ public abstract class Message implements Serializable {
         this.senderInetSocketAddress = inetSocketAddress;
     }
 
-    public abstract void process(TreeNode treeNode);
+    public void process(TreeNode treeNode) throws IOException, InterruptedException {
+        if ((treeNode.getMessageHistory().contains(this)) && !(this.getClass().getSimpleName().equals("AckMessage"))) {
+            treeNode.sendDirectMessage(new AckMessage(uuid, senderInetSocketAddress), senderInetSocketAddress);
+        }
+    }
 
     public UUID getUUID() {
         return uuid;

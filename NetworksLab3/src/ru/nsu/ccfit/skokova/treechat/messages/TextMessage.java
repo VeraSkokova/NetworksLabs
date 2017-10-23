@@ -21,12 +21,14 @@ public class TextMessage extends Message {
     }
 
     @Override
-    public void process(TreeNode treeNode) {
+    public void process(TreeNode treeNode) throws IOException, InterruptedException {
+        super.process(treeNode);
         System.out.println("Received TextMessage from " + author);
         System.out.println(author + " : " + text);
         InetSocketAddress previousAuthorAddress = senderInetSocketAddress;
         senderInetSocketAddress = treeNode.getMyInetSocketAddress();
         try {
+            System.out.println("Gonna resend TextMessage");
             treeNode.sendMessage(this, previousAuthorAddress);
             treeNode.sendDirectMessage(new AckMessage(uuid, treeNode.getMyInetSocketAddress()), previousAuthorAddress);
         } catch (InterruptedException e) {

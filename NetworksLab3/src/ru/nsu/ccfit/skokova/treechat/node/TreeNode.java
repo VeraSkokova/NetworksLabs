@@ -10,6 +10,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.util.Scanner;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -26,7 +27,7 @@ public class TreeNode {
     private Thread outThread;
     private InetSocketAddress parentInetSocketAddress;
     private Thread scannerThread;
-    private CopyOnWriteArrayList<PacketWrapper> messagesToSend = new CopyOnWriteArrayList<>();
+    private ArrayBlockingQueue<PacketWrapper> messagesToSend = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private CopyOnWriteArrayList<UUID> sentMessages = new CopyOnWriteArrayList<>();
     private CopyOnWriteArrayList<Message> messageHistory = new CopyOnWriteArrayList<>();
 
@@ -95,7 +96,7 @@ public class TreeNode {
         return neighbourAddresses;
     }
 
-    public CopyOnWriteArrayList<PacketWrapper> getMessagesToSend() {
+    public ArrayBlockingQueue<PacketWrapper> getMessagesToSend() {
         return messagesToSend;
     }
 
@@ -133,6 +134,7 @@ public class TreeNode {
     }
 
     public void sendMessage(Message message) throws IOException, InterruptedException {
+        //System.out.println("Sending " + message.getUUID());
         byte[] messageBytes = Serializer.serialize(message);
         for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
             if (!isAuthor(inetSocketAddress, message)) {
@@ -144,9 +146,11 @@ public class TreeNode {
     }
 
     public void sendMessage(Message message, InetSocketAddress previousAuthor) throws IOException, InterruptedException {
+        //System.out.println("Sending " + message.getUUID());
         byte[] messageBytes = Serializer.serialize(message);
         for (InetSocketAddress inetSocketAddress : getNeighbourAddresses()) {
             if ((!isAuthor(inetSocketAddress, message)) && (!inetSocketAddress.equals(previousAuthor))) {
+                System.out.println("Added to sender");
                 addToSender(new PacketWrapper(message.getUUID(), new DatagramPacket(messageBytes, messageBytes.length, inetSocketAddress)));
             }
         }
@@ -177,10 +181,12 @@ public class TreeNode {
         }
     }
 
-    private void addToSender(PacketWrapper packetWrapper) {
-        if (!messagesToSend.contains(packetWrapper)) {
-            messagesToSend.add(packetWrapper);
-        }
+    private void addToSender(PacketWrapper packetWrapper) throws InterruptedException {
+        messagesToSend.put(packetWrapper);
+    }
+
+    public CopyOnWriteArrayList<Message> getMessageHistory() {
+        return messageHistory;
     }
 
     class Sender implements Runnable {
@@ -189,20 +195,23 @@ public class TreeNode {
         public void run() {
             while (!Thread.interrupted()) {
                 try {
-                    if (!messagesToSend.isEmpty()) {
-                        PacketWrapper packetWrapper = messagesToSend.get(0);
-                        long currentTime = System.currentTimeMillis();
-                        if (currentTime - packetWrapper.getLastAttempt() > PacketWrapper.DIFF) {
-                            DatagramPacket message = packetWrapper.getDatagramPacket();
-                            socket.send(message);
-                            messagesToSend.get(0).setLastAttempt(currentTime);
-                            if (packetWrapper.isAck()) {
-                                messagesToSend.remove(packetWrapper);
-                            }
-                        } else {
-                            Thread.sleep(currentTime - packetWrapper.getLastAttempt());
+                    PacketWrapper packetWrapper = messagesToSend.take();
+                    //System.out.println("Took " + packetWrapper.getUuid());
+                    long currentTime = System.currentTimeMillis();
+                    if (currentTime - packetWrapper.getLastAttempt() > PacketWrapper.DIFF) {
+                        //System.out.println("Here");
+                        DatagramPacket message = packetWrapper.getDatagramPacket();
+                        socket.send(message);
+                        packetWrapper.setLastAttempt(currentTime);
+                        if (!packetWrapper.isAck()) {
+                            messagesToSend.put(packetWrapper);
                         }
+                    } else {
+                        //System.out.println(currentTime - packetWrapper.getLastAttempt());
+                        messagesToSend.put(packetWrapper);
+                        Thread.sleep(currentTime - packetWrapper.getLastAttempt());
                     }
+
                 } catch (IOException e) {
                     System.out.println(e.getMessage());
                 } catch (InterruptedException e) {
@@ -230,6 +239,8 @@ public class TreeNode {
                     }
                 } catch (IOException | ClassNotFoundException e) {
                     System.out.println(e.getMessage());
+                } catch (InterruptedException e) {
+                    System.out.println("Interrupted");
                 }
             }
         }

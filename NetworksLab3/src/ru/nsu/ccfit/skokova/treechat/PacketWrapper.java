@@ -4,16 +4,18 @@ import java.net.DatagramPacket;
 import java.util.UUID;
 
 public class PacketWrapper {
-    public static final long DIFF = 1000;
+    public static final long DIFF = 500;
     private UUID uuid;
     private DatagramPacket datagramPacket;
     private long lastAttempt;
     private boolean isAck;
+    private boolean isSent;
 
     public PacketWrapper(UUID uuid) {
         this.uuid = uuid;
         this.lastAttempt = System.currentTimeMillis();
         this.isAck = false;
+        this.isSent = false;
     }
 
     public PacketWrapper(UUID uuid, DatagramPacket datagramPacket) {
@@ -21,6 +23,7 @@ public class PacketWrapper {
         this.datagramPacket = datagramPacket;
         this.lastAttempt = System.currentTimeMillis();
         this.isAck = false;
+        this.isSent = false;
     }
 
     public UUID getUuid() {
@@ -62,5 +65,13 @@ public class PacketWrapper {
 
     public void setAck(boolean ack) {
         isAck = ack;
+    }
+
+    public boolean isSent() {
+        return isSent;
+    }
+
+    public void setSent(boolean sent) {
+        isSent = sent;
     }
 }
