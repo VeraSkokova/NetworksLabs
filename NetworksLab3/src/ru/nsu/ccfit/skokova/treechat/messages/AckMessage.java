@@ -17,7 +17,7 @@ public class AckMessage extends Message {
 
     @Override
     public void process(TreeNode treeNode) {
-        System.out.println("Received AckMessage");
+        //System.out.println("Received AckMessage");
         if (treeNode.getSentMessages().contains(uuid)) {
             treeNode.getSentMessages().remove(uuid);
         }
