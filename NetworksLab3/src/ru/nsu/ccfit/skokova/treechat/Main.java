@@ -6,10 +6,7 @@ public class Main {
     private static final int SIMPLE_ARGS_SIZE = 4;
     private static final int ROOT_ARGS_SIZE = 6;
 
-    public static void main(String[] args) {/*
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeAdapter(Message.class, new MessageDeserializer());
-*/
+    public static void main(String[] args) {
         TreeNode treeNode = null;
         if (args.length >= SIMPLE_ARGS_SIZE) {
             String nodeName = args[0];
