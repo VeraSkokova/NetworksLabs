@@ -1,10 +1,8 @@
-package ru.nsu.ccfit.skokova.SimpleTCP.client;
+package ru.nsu.ccfit.skokova.SimpleTcp.client;
 
-import ru.nsu.ccfit.skokova.SimpleTCP.message.MessageTypes;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.MessageType;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -15,15 +13,13 @@ import java.util.concurrent.BlockingQueue;
 public class SimpleTcpClientSocket {
     private static final int BUF_SIZE = 256;
     private static final int QUEUE_SIZE = 1024;
+    private static final int TYPE_SIZE = 10;
     private DatagramSocket datagramSocket;
     private BlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private BlockingQueue<DatagramPacket> outPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
 
     private InetAddress inetAddress;
     private int port;
-
-    private InputStream inputStream;
-    private OutputStream outputStream;
 
     private byte[] inBuffer;
     private byte[] outBuffer;
@@ -39,10 +35,10 @@ public class SimpleTcpClientSocket {
         this.inetAddress = inetAddress;
         this.port = port;
         try {
-            MessageTypes messageType = MessageTypes.CONNECT;
+            MessageType messageType = MessageType.CONNECT;
             byte[] messageBytes = messageType.name().getBytes();
             datagramSocket = new DatagramSocket(port, inetAddress);
-            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, datagramSocket.getInetAddress(), datagramSocket.getPort());
+            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, TYPE_SIZE, datagramSocket.getInetAddress(), datagramSocket.getPort());
             inPackets.put(datagramPacket);
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
@@ -52,19 +48,35 @@ public class SimpleTcpClientSocket {
 
     }
 
-    public InputStream getInputStream() {
-        return inputStream;
+    public void send(byte[] messageBytes) {
+        try {
+            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length);
+            outPackets.put(datagramPacket);
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        }
     }
 
-    public OutputStream getOutputStream() {
-        return outputStream;
+    public byte[] receive() {
+        byte[] messageBytes = null;
+        try {
+            DatagramPacket datagramPacket = inPackets.take();
+            messageBytes = datagramPacket.getData();
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        }
+        return messageBytes;
+    }
+
+    public void close() {
+
     }
 
     class Sender implements Runnable {
         @Override
         public void run() {
             try {
-                DatagramPacket datagramPacket = inPackets.take();
+                DatagramPacket datagramPacket = outPackets.take();
                 datagramSocket.send(datagramPacket);
             } catch (InterruptedException e) {
                 System.out.println("Interrupted");
@@ -80,7 +92,7 @@ public class SimpleTcpClientSocket {
             try {
                 DatagramPacket datagramPacket = new DatagramPacket(outBuffer, outBuffer.length);
                 datagramSocket.receive(datagramPacket);
-                outPackets.put(datagramPacket);
+                inPackets.put(datagramPacket);
             } catch (IOException e) {
                 System.out.println(e.getMessage());
             } catch (InterruptedException e) {
@@ -89,7 +101,7 @@ public class SimpleTcpClientSocket {
         }
     }
 
-    class InputStreamScanner implements Runnable {
+    /*class InputStreamScanner implements Runnable {
         @Override
         public void run() {
             try {
@@ -117,5 +129,5 @@ public class SimpleTcpClientSocket {
                 System.out.println(e.getMessage());
             }
         }
-    }
+    }*/
 }
