@@ -1,59 +1,96 @@
 package ru.nsu.ccfit.skokova.SimpleTcp.client;
 
+import org.codehaus.jackson.JsonGenerationException;
+import org.codehaus.jackson.JsonParseException;
+import org.codehaus.jackson.map.JsonMappingException;
+import org.codehaus.jackson.map.ObjectMapper;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.ConnectMessage;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.MessageType;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 public class SimpleTcpClientSocket {
     private static final int BUF_SIZE = 256;
     private static final int QUEUE_SIZE = 1024;
-    private static final int TYPE_SIZE = 10;
+    private static final int PACK_SIZE = 64;
     private DatagramSocket datagramSocket;
     private BlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private BlockingQueue<DatagramPacket> outPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
 
-    private InetAddress inetAddress;
+    private String inetAddress;
     private int port;
 
-    private byte[] inBuffer;
-    private byte[] outBuffer;
+    private String myAddress = "localhost";
+    private int myPort = 3248;
+
+    private byte[] inBuffer = new byte[BUF_SIZE];
+    private byte[] outBuffer = new byte[BUF_SIZE];
 
     public SimpleTcpClientSocket() {
-    }
-
-    public SimpleTcpClientSocket(InetAddress inetAddress, int port) {
-        connect(inetAddress, port);
-    }
-
-    public void connect(InetAddress inetAddress, int port) {
-        this.inetAddress = inetAddress;
-        this.port = port;
         try {
-            MessageType messageType = MessageType.CONNECT;
-            byte[] messageBytes = messageType.name().getBytes();
-            datagramSocket = new DatagramSocket(port, inetAddress);
-            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, TYPE_SIZE, datagramSocket.getInetAddress(), datagramSocket.getPort());
-            inPackets.put(datagramPacket);
-        } catch (InterruptedException e) {
-            System.out.println("Interrupted");
+            datagramSocket = new DatagramSocket(new InetSocketAddress(myAddress, myPort));
+            Thread sender = new Thread(new Sender());
+            Thread receiver = new Thread(new Receiver());
+            sender.start();
+            receiver.start();
         } catch (SocketException e) {
             System.out.println(e.getMessage());
         }
+    }
 
+    public SimpleTcpClientSocket(String inetAddress, int port) {
+        connect(inetAddress, port);
+    }
+
+    public void connect(String inetAddress, int port) {
+        this.inetAddress = inetAddress;
+        this.port = port;
+        try {
+            Message message = new ConnectMessage(myAddress, myPort);
+            ObjectMapper objectMapper = new ObjectMapper();
+            String messageString = objectMapper.writeValueAsString(message);
+            DatagramPacket datagramPacket = new DatagramPacket(messageString.getBytes(), messageString.getBytes().length, new InetSocketAddress(inetAddress, port));
+            outPackets.put(datagramPacket);
+            System.out.println("Connecting");
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
     public void send(byte[] messageBytes) {
+        ObjectMapper objectMapper = new ObjectMapper();
         try {
-            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length);
-            outPackets.put(datagramPacket);
+            if (messageBytes.length < PACK_SIZE) {
+                DataMessage dataMessage = new DataMessage(messageBytes);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
+                outPackets.put(datagramPacket);
+            } else {
+                int packetsCount = messageBytes.length / PACK_SIZE;
+                int rest = messageBytes.length - PACK_SIZE * packetsCount;
+                int i;
+                for (i = 0; i < packetsCount * PACK_SIZE; i += PACK_SIZE) {
+                    byte[] data = Arrays.copyOfRange(messageBytes, i, i + PACK_SIZE - 1);
+                    DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
+                    outPackets.put(datagramPacket);
+                }
+                byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
+                DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
+                outPackets.put(datagramPacket);
+            }
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
+        }  catch (IOException e) {
+            System.out.println(e.getMessage());
         }
     }
 
@@ -62,8 +99,16 @@ public class SimpleTcpClientSocket {
         try {
             DatagramPacket datagramPacket = inPackets.take();
             messageBytes = datagramPacket.getData();
+            ObjectMapper objectMapper = new ObjectMapper();
+            Message message = objectMapper.readValue(new String(messageBytes, StandardCharsets.UTF_8), Message.class);
+            if (message.getClass().getSimpleName().equals("DataMessage")) { //TODO : rewrite
+                DataMessage dataMessage = (DataMessage)message;
+                return dataMessage.getData();
+            }
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
         }
         return messageBytes;
     }
@@ -101,33 +146,9 @@ public class SimpleTcpClientSocket {
         }
     }
 
-    /*class InputStreamScanner implements Runnable {
-        @Override
-        public void run() {
-            try {
-                int read = inputStream.read(inBuffer, 0, BUF_SIZE);
-                DatagramPacket datagramPacket = new DatagramPacket(inBuffer, inBuffer.length, inetAddress, port);
-                inPackets.put(datagramPacket);
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted");
-            }
-        }
+    private byte[] wrapBytes(byte[] bytes) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        DataMessage dataMessage = new DataMessage(bytes);
+        return objectMapper.writeValueAsBytes(dataMessage);
     }
-
-    class OutputStreamScanner implements Runnable {
-        @Override
-        public void run() {
-            try {
-                DatagramPacket datagramPacket = outPackets.take();
-                byte[] messageBytes = datagramPacket.getData();
-                outputStream.write(messageBytes);
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted");
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
-            }
-        }
-    }*/
 }

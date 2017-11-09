@@ -4,12 +4,13 @@ import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
-@JsonPropertyOrder({"messageType", "hostName", "port"})
+@JsonPropertyOrder({"messageType", "hostName", "port", "id"})
 public class ConnectMessage extends Message {
     private String hostName;
     private int port;
 
     public ConnectMessage() {
+        super();
         this.messageType = MessageType.CONNECT;
     }
 
