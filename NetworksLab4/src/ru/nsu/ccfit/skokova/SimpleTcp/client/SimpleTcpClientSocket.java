@@ -1,18 +1,20 @@
 package ru.nsu.ccfit.skokova.SimpleTcp.client;
 
-import org.codehaus.jackson.JsonGenerationException;
-import org.codehaus.jackson.JsonParseException;
-import org.codehaus.jackson.map.JsonMappingException;
+import org.apache.commons.lang.ArrayUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.ConnectMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.MessageType;
 
 import java.io.IOException;
-import java.net.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
@@ -78,43 +80,80 @@ public class SimpleTcpClientSocket {
                 int packetsCount = messageBytes.length / PACK_SIZE;
                 int rest = messageBytes.length - PACK_SIZE * packetsCount;
                 int i;
+                UUID nextUUID = UUID.randomUUID();
                 for (i = 0; i < packetsCount * PACK_SIZE; i += PACK_SIZE) {
                     byte[] data = Arrays.copyOfRange(messageBytes, i, i + PACK_SIZE - 1);
-                    DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
+                    DataMessage dataMessage = new DataMessage(data);
+                    dataMessage.setId(nextUUID);
+                    nextUUID = UUID.randomUUID();
+                    dataMessage.setNextId(nextUUID);
+                    byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                    DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
                     outPackets.put(datagramPacket);
                 }
                 byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
-                DatagramPacket datagramPacket = new DatagramPacket(data, data.length);
+                DataMessage dataMessage = new DataMessage(data);
+                dataMessage.setId(nextUUID);
+                dataMessage.setNextId(null);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
                 outPackets.put(datagramPacket);
-            }
-        } catch (InterruptedException e) {
-            System.out.println("Interrupted");
-        }  catch (IOException e) {
-            System.out.println(e.getMessage());
-        }
-    }
-
-    public byte[] receive() {
-        byte[] messageBytes = null;
-        try {
-            DatagramPacket datagramPacket = inPackets.take();
-            messageBytes = datagramPacket.getData();
-            ObjectMapper objectMapper = new ObjectMapper();
-            Message message = objectMapper.readValue(new String(messageBytes, StandardCharsets.UTF_8), Message.class);
-            if (message.getClass().getSimpleName().equals("DataMessage")) { //TODO : rewrite
-                DataMessage dataMessage = (DataMessage)message;
-                return dataMessage.getData();
             }
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
         } catch (IOException e) {
             System.out.println(e.getMessage());
         }
-        return messageBytes;
+    }
+
+    public long receive(byte[] result, int startOffset, int length) {
+        byte[] messageBytes;
+        DataMessage dataMessage;
+        long count = 0;
+        try {
+            DatagramPacket datagramPacket = inPackets.take();
+            messageBytes = datagramPacket.getData();
+            ObjectMapper objectMapper = new ObjectMapper();
+            Message message = objectMapper.readValue(new String(messageBytes, StandardCharsets.UTF_8), Message.class);
+            if (message.getClass().getSimpleName().equals("DataMessage")) { //TODO : rewrite
+                dataMessage = (DataMessage)message;
+                UUID nextUuid = dataMessage.getNextId();
+                for (byte b : dataMessage.getData()) {
+                    result[startOffset] = b;
+                    startOffset++;
+                    count++;
+                }
+                while (dataMessage.getNextId() != null) {
+                    DatagramPacket packet = inPackets.take();
+                    messageBytes = packet.getData();
+                    dataMessage = (DataMessage) objectMapper.readValue(new String(messageBytes, StandardCharsets.UTF_8), Message.class);
+                    if (!dataMessage.getId().equals(nextUuid)) {
+                        continue;
+                    }
+                    nextUuid = dataMessage.getNextId();
+                    for (byte b : dataMessage.getData()) {
+                        result[startOffset] = b;
+                        startOffset++;
+                        count++;
+                    }
+                }
+            }
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
+        return count;
     }
 
     public void close() {
 
+    }
+
+    private byte[] wrapBytes(byte[] bytes) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        DataMessage dataMessage = new DataMessage(bytes);
+        return objectMapper.writeValueAsBytes(dataMessage);
     }
 
     class Sender implements Runnable {
@@ -144,11 +183,5 @@ public class SimpleTcpClientSocket {
                 System.out.println("Interrupted");
             }
         }
-    }
-
-    private byte[] wrapBytes(byte[] bytes) throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        DataMessage dataMessage = new DataMessage(bytes);
-        return objectMapper.writeValueAsBytes(dataMessage);
     }
 }

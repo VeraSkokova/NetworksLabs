@@ -1,10 +1,12 @@
 package ru.nsu.ccfit.skokova.SimpleTcp.example;
 
-import ru.nsu.ccfit.skokova.SimpleTcp.client.SimpleTcpClientSocket;
 import ru.nsu.ccfit.skokova.SimpleTcp.server.SimpleTcpServerSocket;
+import ru.nsu.ccfit.skokova.SimpleTcp.server.SocketSimulator;
 
-import java.io.*;
-import java.net.Socket;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -37,10 +39,12 @@ public class Server {
             //try {
             serverSocket = new SimpleTcpServerSocket(serverPort);
             while (!Thread.interrupted()) {
-                SimpleTcpClientSocket socket;
+                SocketSimulator socket;
                 //try {
-                serverSocket.accept();
+                socket = serverSocket.accept();
                 System.out.println("Accepted");
+                ConnectedClient connectedClient = new ConnectedClient(socket);
+                connectedClient.run();
                         /*System.out.println("New connection: " + socket.getInetAddress().getHostAddress());
                         ConnectedClient connectedClient = new ConnectedClient(socket);
                         connectedClient.run();*/
@@ -59,9 +63,9 @@ public class Server {
 class ConnectedClient {
     private static final int BUF_SIZE = 1024;
 
-    private Socket socket;
+    private SocketSimulator socket;
 
-    ConnectedClient(Socket socket) {
+    ConnectedClient(SocketSimulator socket) {
         this.socket = socket;
     }
 
@@ -75,20 +79,24 @@ class ConnectedClient {
 
         @Override
         public void run() {
-            try (DataInputStream dataInputStream = new DataInputStream(socket.getInputStream());
-                 DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
+            try {
                 System.out.println("Running handler");
 
-                long fileSize = dataInputStream.readLong();
+                byte[] fileSizeByte = new byte[Long.BYTES];
+                socket.receive(fileSizeByte, 0, Long.BYTES);
+                long fileSize = Long.valueOf(new String(fileSizeByte, StandardCharsets.UTF_8));
                 System.out.println("FileSize: " + fileSize);
-                int fileNameSize = dataInputStream.readInt();
+
+                byte[] fileNameByte = new byte[Integer.BYTES];
+                socket.receive(fileNameByte, 0, Integer.BYTES);
+                int fileNameSize = Integer.valueOf(new String(fileNameByte, StandardCharsets.UTF_8));
                 System.out.println("FileNameSize: " + fileNameSize);
 
-                int read;
+                int read = 0;
                 byte[] stringBuffer = new byte[fileNameSize];
                 int totalFileNameRead = 0;
                 while (totalFileNameRead < fileNameSize) {
-                    totalFileNameRead += dataInputStream.read(stringBuffer, totalFileNameRead, fileNameSize - totalFileNameRead);
+                    totalFileNameRead += socket.receive(stringBuffer,totalFileNameRead, fileNameSize - totalFileNameRead);
                 }
                 String fileName = new String(stringBuffer, StandardCharsets.UTF_8);
 
@@ -105,7 +113,7 @@ class ConnectedClient {
                     byte[] buffer = new byte[BUF_SIZE];
 
                     synchronized (this) {
-                        while ((totalRead < fileSize) && ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
+                        while ((totalRead < fileSize)) //&& ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
                             outputStream.write(buffer, 0, read);
                             totalRead += read;
                             outputStream.flush();
@@ -122,22 +130,21 @@ class ConnectedClient {
                         System.out.println("Problem with saving file");
                     }
 
-                    dataOutputStream.writeBytes(response);
+                    socket.send(response.getBytes());
+                    timer.cancel();
                 } catch (IOException e) {
                     System.out.println(e.getMessage());
                 }
 
-                timer.cancel();
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+
             }
-        }
 
         synchronized long getTotalRead() {
             return totalRead;
         }
+        }
     }
-}
+
 
 class SpeedMeter extends TimerTask {
     private long startTime;

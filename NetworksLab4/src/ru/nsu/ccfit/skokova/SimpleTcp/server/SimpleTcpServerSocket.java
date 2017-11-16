@@ -1,6 +1,5 @@
 package ru.nsu.ccfit.skokova.SimpleTcp.server;
 
-import org.apache.commons.lang.ArrayUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.ConnectMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
@@ -28,7 +27,7 @@ public class SimpleTcpServerSocket {
     private BlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private List<SocketSimulator> socketSimulators = new ArrayList<>();
 
-    private Map<SocketSimulator, TreeSet<DataMessage>> bytesForSockets = new HashMap<>(); //other type of collection?
+    private Map<SocketSimulator, SortedSet<DataMessage>> bytesForSockets = new HashMap<>(); //other type of collection?
 
     public SimpleTcpServerSocket(int port) {
         try {
@@ -50,9 +49,10 @@ public class SimpleTcpServerSocket {
             socketSimulator = new SocketSimulator(this, inetSocketAddress.getAddress().getHostAddress(), inetSocketAddress.getPort());
             socketSimulators.add(socketSimulator);
             SortedSet<DataMessage> sortedMessages = Collections.synchronizedSortedSet(new TreeSet<DataMessage>());
-            bytesForSockets.put(socketSimulator, (TreeSet<DataMessage>) sortedMessages);
+            bytesForSockets.put(socketSimulator, sortedMessages);
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
+
         }
         return socketSimulator;
     }

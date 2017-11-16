@@ -4,11 +4,13 @@ import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
+import java.util.UUID;
+
 @JsonPropertyOrder({"messageType", "data", "id", "nextId"})
 public class DataMessage extends Message {
     @JsonProperty("data")
     private byte[] data;
-    private int nextId;
+    private UUID nextId;
 
     public DataMessage() {
         this.messageType = MessageType.DATA;
@@ -21,7 +23,7 @@ public class DataMessage extends Message {
     }
 
     @JsonCreator
-    public DataMessage(@JsonProperty("data") byte[] data, @JsonProperty("nextId") int nextId) {
+    public DataMessage(@JsonProperty("data") byte[] data, @JsonProperty("nextId") UUID nextId) {
         this();
         this.data = data;
         this.nextId = nextId;
@@ -35,7 +37,15 @@ public class DataMessage extends Message {
         this.data = data;
     }
 
-    public int getNextId() {
+    public UUID getNextId() {
         return nextId;
+    }
+
+    public void setNextId(UUID nextId) {
+        this.nextId = nextId;
+    }
+
+    public void setId(UUID uuid) {
+        this.id = uuid;
     }
 }

@@ -4,6 +4,7 @@ import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.map.annotate.JsonDeserialize;
 
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @JsonDeserialize(using = MessageDeserializer.class)
@@ -11,13 +12,13 @@ public abstract class Message implements Comparable<Message>{
     protected MessageType messageType;
     protected static final AtomicInteger ID = new AtomicInteger(1);
     @JsonProperty("id")
-    protected int id;
+    protected UUID id;
     protected String hostName;
     protected int port;
 
     @JsonCreator
     public Message() {
-        this.id = ID.getAndIncrement();
+        this.id = UUID.randomUUID();
     }
 
     public MessageType getMessageType() {
@@ -44,7 +45,7 @@ public abstract class Message implements Comparable<Message>{
         this.port = port;
     }
 
-    public int getId() {
+    public UUID getId() {
         return id;
     }
 
@@ -60,11 +61,11 @@ public abstract class Message implements Comparable<Message>{
 
     @Override
     public int hashCode() {
-        return id;
+        return id != null ? id.hashCode() : 0;
     }
 
     @Override
     public int compareTo(Message message) {
-        return id - message.getId();
+        return id.compareTo(message.id);
     }
 }

@@ -14,6 +14,7 @@ public class Client {
     private static final int CODES_COUNT = 4;
     private static final char[] CODES = {'A', 'C', 'G', 'T'};
     private static final int TIME_TO_PRINT = 10;
+    private static final int SLEEP_TIME = 300;
     private static String serverName;
     private static int serverPort;
     private final UUID uuid;
@@ -53,9 +54,9 @@ public class Client {
             } else {
                 try {
                     System.out.println("Server is unreachable, wait...");
-                    Thread.sleep(3000);
+                    Thread.sleep(SLEEP_TIME);
                 } catch (InterruptedException e) {
-                    System.out.println("Interrupted");
+                    System.err.println("Interrupted");
                 }
             }
         }
@@ -64,11 +65,11 @@ public class Client {
     private void calculateHashes() {
         try {
             MessageDigest md5Counter = MessageDigest.getInstance("MD5");
-            for (long i = start; i < end; i++) {
+            for (long i = start; i <= end; i++) {
                 String currentString = codeToString(i, length);
-                if (i % TIME_TO_PRINT == 0) {
+                //if (i % TIME_TO_PRINT == 0) {
                     System.err.println("Current string: " + currentString);
-                }
+                //}
                 byte[] tempHash = md5Counter.digest(currentString.getBytes());
                 String hexTempHash = Hex.toHexString(tempHash);
                 if (hexTempHash.equals(hash)) {
@@ -79,7 +80,7 @@ public class Client {
                 }
             }
         } catch (NoSuchAlgorithmException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
         }
     }
 
@@ -89,22 +90,22 @@ public class Client {
              DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
 
             dataOutputStream.writeInt(uuid.toString().length());
-            System.out.println("Wrote uuidSize: " + uuid.toString().length());
+            //System.out.println("Wrote uuidSize: " + uuid.toString().length());
             dataOutputStream.writeUTF(uuid.toString());
-            System.out.println("Wrote uuid: " + uuid.toString());
+            //System.out.println("Wrote uuid: " + uuid.toString());
 
             if (hash == null) {
-                System.out.println("First connection");
+                //System.out.println("First connection");
                 int hashSize = dataInputStream.readInt();
-                System.out.println("Read hashSize: " + hashSize);
+                //System.out.println("Read hashSize: " + hashSize);
                 hash = dataInputStream.readUTF();
-                System.out.println("Read hash: " + hash);
+                //System.out.println("Read hash: " + hash);
             } else {
                 sendError(dataOutputStream);
             }
 
             instruction = dataInputStream.readUTF();
-            System.out.println("Read instruction: " + instruction);
+            //System.out.println("Read instruction: " + instruction);
 
             if (instruction.equals("WORK")) {
                 length = dataInputStream.readLong();
@@ -115,7 +116,7 @@ public class Client {
             }
             return true;
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
             return false;
         }
     }
@@ -128,7 +129,7 @@ public class Client {
             dataOutputStream.writeUTF("SUCCESS");
             dataOutputStream.writeUTF(result);
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
         }
     }
 
@@ -136,7 +137,7 @@ public class Client {
         try {
             dataOutputStream.writeUTF("ERROR");
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
         }
     }
 

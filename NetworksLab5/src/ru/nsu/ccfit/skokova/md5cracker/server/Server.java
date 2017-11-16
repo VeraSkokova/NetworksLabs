@@ -9,13 +9,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 public class Server {
     private static final int CODES_COUNT = 4;
-    private static final int MAX_LENGTH = 8;
+    private static final int MAX_LENGTH = 11;
     private static final long MAX_TIME_DIFF = 10000;
     private static final long SLEEP_TIME = 3000;
 
@@ -46,16 +47,22 @@ public class Server {
             Thread timeChecker = new Thread(new TimeCheckerRunnable());
             timeChecker.start();
         } catch (InterruptedException e) {
-            System.out.println("Interrupted");
+            System.err.println("Interrupted");
         }
     }
 
     private void fillTasks() throws InterruptedException {
         int tasksSize = (int) Math.pow(CODES_COUNT, MAX_LENGTH);
+        int rangeSize = 1;
+        int power = 0;
         for (int i = 0; i < tasksSize; i++) {
+            if ((i != 0) && (i % CODES_COUNT == 0)) {
+                power++;
+                rangeSize = (int) Math.pow(CODES_COUNT, power);
+            }
             int length = i / CODES_COUNT + 1;
-            int start = length * (i % CODES_COUNT);
-            int end = start + (int) Math.pow(CODES_COUNT, length) / CODES_COUNT;
+            int start = rangeSize * (i % CODES_COUNT);
+            int end = start + rangeSize - 1;
             tasks.put(new Task(length, start, end));
         }
     }
@@ -70,15 +77,15 @@ public class Server {
                     Socket socket;
                     try {
                         socket = serverSocket.accept();
-                        System.out.println("New connection: " + socket.getInetAddress().getHostAddress());
+                        //System.out.println("New connection: " + socket.getInetAddress().getHostAddress());
                         ConnectedClient connectedClient = new ConnectedClient(socket);
                         connectedClient.run();
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        System.err.println(e.getMessage());
                     }
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println(e.getMessage());
             }
         }
     }
@@ -86,18 +93,21 @@ public class Server {
     class TimeCheckerRunnable implements Runnable {
         @Override
         public void run() {
-            try {
-                Thread.sleep(SLEEP_TIME);
-                long currentTime = System.currentTimeMillis();
-                for (String key : timeMap.keySet()) {
-                    if (timeMap.get(key) - currentTime < MAX_TIME_DIFF) {
-                        Task task = taskMap.get(key);
-                        tasks.put(task);
-                        timeMap.remove(key);
+            while (!Thread.interrupted()) {
+                try {
+                    Thread.sleep(SLEEP_TIME);
+                    long currentTime = System.currentTimeMillis();
+                    for (Iterator<String> iterator = timeMap.keySet().iterator(); iterator.hasNext(); ) {
+                        String key = iterator.next();
+                        if (timeMap.get(key) - currentTime < MAX_TIME_DIFF) {
+                            Task task = taskMap.get(key);
+                            tasks.put(task);
+                            iterator.remove();
+                        }
                     }
+                } catch (InterruptedException e) {
+                    System.err.println(e.getMessage());
                 }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
     }
@@ -121,23 +131,24 @@ public class Server {
                      DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
 
                     int uuidSize = dataInputStream.readInt();
-                    System.out.println("Read uuidSize: " + uuidSize);
+                    //System.out.println("Read uuidSize: " + uuidSize);
                     String uuidString = dataInputStream.readUTF();
-                    System.out.println("Read uuid: " + uuidString);
+                    //System.out.println("Read uuid: " + uuidString);
 
                     if (!taskMap.containsKey(uuidString)) {
-                        System.out.println("New client");
+                        //System.out.println("New client");
                         dataOutputStream.writeInt(hashString.length());
-                        System.out.println("Wrote hashLength: " + hashString.length());
+                        //System.out.println("Wrote hashLength: " + hashString.length());
                         dataOutputStream.writeUTF(hashString);
-                        System.out.println("Wrote hash: " + hashString);
+                        //System.out.println("Wrote hash: " + hashString);
                     } else {
-                        System.out.println("Old client");
+                        //System.out.println("Old client");
                         String message = dataInputStream.readUTF();
-                        System.out.println("Read message: " + message);
+                        //System.out.println("Read message: " + message);
                         if (message.equals("SUCCESS")) {
                             result = dataInputStream.readUTF();
                             System.err.println("Solution: " + result);
+                            System.exit(0);
                             return;
                         } else if (message.equals("ERROR")) {
                             System.err.println(uuidString + " didn't find the solution");
@@ -157,9 +168,9 @@ public class Server {
                     }
 
                 } catch (IOException e) {
-                    System.out.println(e.getMessage());
+                    System.err.println(e.getMessage());
                 } catch (InterruptedException e) {
-                    System.out.println("Interrupted");
+                    System.err.println("Interrupted");
                 }
             }
         }

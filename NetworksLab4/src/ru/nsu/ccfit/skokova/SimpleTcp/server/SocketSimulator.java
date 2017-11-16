@@ -3,13 +3,15 @@ package ru.nsu.ccfit.skokova.SimpleTcp.server;
 import org.apache.commons.lang.ArrayUtils;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.TreeSet;
+import java.util.UUID;
 
 public class SocketSimulator {
+    private static final int PACK_SIZE = 64;
     private SimpleTcpServerSocket serverSocket;
     private String inetAddress;
     private int port;
@@ -22,28 +24,61 @@ public class SocketSimulator {
         this.port = port;
     }
 
-    public void send(byte[] data) throws IOException {
-        Message message = new DataMessage(data);
-        message.setHostName(inetAddress);
-        message.setPort(port);
+    public void send(byte[] messageBytes) throws IOException {
         ObjectMapper objectMapper = new ObjectMapper();
-        byte[] messageBytes = objectMapper.writeValueAsBytes(message);
-        serverSocket.send(messageBytes);
+        try {
+            if (messageBytes.length < PACK_SIZE) {
+                DataMessage dataMessage = new DataMessage(messageBytes);
+                dataMessage.setHostName(inetAddress);
+                dataMessage.setPort(port);
+                dataMessage.setNextId(null);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                serverSocket.send(msg);
+            } else {
+                int packetsCount = messageBytes.length / PACK_SIZE;
+                int rest = messageBytes.length - PACK_SIZE * packetsCount;
+                int i;
+                UUID nextUUID = UUID.randomUUID();
+                for (i = 0; i < packetsCount * PACK_SIZE; i += PACK_SIZE) {
+                    byte[] data = Arrays.copyOfRange(messageBytes, i, i + PACK_SIZE - 1);
+                    DataMessage dataMessage = new DataMessage(data);
+                    dataMessage.setHostName(inetAddress);
+                    dataMessage.setPort(port);
+                    dataMessage.setId(nextUUID);
+                    nextUUID = UUID.randomUUID();
+                    dataMessage.setNextId(nextUUID);
+                    byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                    serverSocket.send(msg);
+                }
+                byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
+                DataMessage dataMessage = new DataMessage(data);
+                dataMessage.setHostName(inetAddress);
+                dataMessage.setPort(port);
+                dataMessage.setId(nextUUID);
+                dataMessage.setNextId(null);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+                serverSocket.send(msg);
+            }
+        } catch (IOException e) {
+            System.out.println(e.getMessage());
+        }
     }
 
-    public byte[] receive() {
+    public int receive(byte[] result, int startOffset, int length) {
+        int count = 0;
         if (messages.isEmpty()) {
             messages = serverSocket.receive(this);
         }
-        ArrayList<Byte> result = new ArrayList<>();
         do {
             byte[] bytes = messages.first().getData();
             for (byte b : bytes) {
-                result.add(b);
+                result[startOffset] = b;
+                startOffset++;
+                count++;
             }
             messages.remove(messages.first());
-        } while (messages.first().getNextId() != 0);
-        return ArrayUtils.toPrimitive(result.toArray(new Byte[result.size()]));
+        } while ((messages.first().getNextId() != null) && (count != length));
+        return count;
     }
 
     @Override
