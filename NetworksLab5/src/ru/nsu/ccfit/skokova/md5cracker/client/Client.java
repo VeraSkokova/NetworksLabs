@@ -67,9 +67,9 @@ public class Client {
             MessageDigest md5Counter = MessageDigest.getInstance("MD5");
             for (long i = start; i <= end; i++) {
                 String currentString = codeToString(i, length);
-                //if (i % TIME_TO_PRINT == 0) {
+                if (i % TIME_TO_PRINT == 0) {
                     System.err.println("Current string: " + currentString);
-                //}
+                }
                 byte[] tempHash = md5Counter.digest(currentString.getBytes());
                 String hexTempHash = Hex.toHexString(tempHash);
                 if (hexTempHash.equals(hash)) {

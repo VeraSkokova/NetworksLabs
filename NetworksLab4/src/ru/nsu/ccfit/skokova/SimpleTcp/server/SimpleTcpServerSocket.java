@@ -34,7 +34,9 @@ public class SimpleTcpServerSocket {
             this.port = port;
             datagramServerSocket = new DatagramSocket(port);
             Thread receiver = new Thread(new Receiver());
+            Thread sender = new Thread(new Sender());
             receiver.start();
+            sender.start();
         } catch (SocketException e) {
             System.out.println(e.getMessage());
         }
@@ -103,13 +105,15 @@ public class SimpleTcpServerSocket {
     class Sender implements Runnable {
         @Override
         public void run() {
-            try {
-                DatagramPacket datagramPacket = outPackets.take();
-                datagramServerSocket.send(datagramPacket);
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted");
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+            while (!Thread.interrupted()) {
+                try {
+                    DatagramPacket datagramPacket = outPackets.take();
+                    datagramServerSocket.send(datagramPacket);
+                } catch (InterruptedException e) {
+                    System.out.println("Interrupted");
+                } catch (IOException e) {
+                    System.out.println(e.getMessage());
+                }
             }
         }
     }
@@ -117,13 +121,16 @@ public class SimpleTcpServerSocket {
     class Receiver implements Runnable {
         @Override
         public void run() {
-            try {
-                DatagramPacket datagramPacket = new DatagramPacket(new byte[PACK_SIZE], PACK_SIZE);
-                datagramServerSocket.receive(datagramPacket);
-                byte[] messageBytes = datagramPacket.getData();
-                process(messageBytes);
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+            while (!Thread.interrupted()) {
+                try {
+                    DatagramPacket datagramPacket = new DatagramPacket(new byte[PACK_SIZE], PACK_SIZE);
+                    datagramServerSocket.receive(datagramPacket);
+                    System.out.println("Received packet: " + datagramPacket.toString());
+                    byte[] messageBytes = datagramPacket.getData();
+                    process(messageBytes);
+                } catch (IOException e) {
+                    System.out.println(e.getMessage());
+                }
             }
         }
 

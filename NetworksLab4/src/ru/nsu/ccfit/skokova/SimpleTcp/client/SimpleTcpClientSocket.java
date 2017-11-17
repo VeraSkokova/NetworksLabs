@@ -11,20 +11,22 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class SimpleTcpClientSocket {
     private static final int BUF_SIZE = 256;
     private static final int QUEUE_SIZE = 1024;
     private static final int PACK_SIZE = 64;
     private DatagramSocket datagramSocket;
-    private BlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
-    private BlockingQueue<DatagramPacket> outPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private ArrayBlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private ArrayBlockingQueue<DatagramPacket> outPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
 
     private String inetAddress;
     private int port;
@@ -57,9 +59,9 @@ public class SimpleTcpClientSocket {
         try {
             Message message = new ConnectMessage(myAddress, myPort);
             ObjectMapper objectMapper = new ObjectMapper();
-            String messageString = objectMapper.writeValueAsString(message);
-            DatagramPacket datagramPacket = new DatagramPacket(messageString.getBytes(), messageString.getBytes().length, new InetSocketAddress(inetAddress, port));
-            outPackets.put(datagramPacket);
+            byte[] messageBytes = objectMapper.writeValueAsBytes(message);
+            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(inetAddress, port));
+            addToSender(datagramPacket);
             System.out.println("Connecting");
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
@@ -74,8 +76,8 @@ public class SimpleTcpClientSocket {
             if (messageBytes.length < PACK_SIZE) {
                 DataMessage dataMessage = new DataMessage(messageBytes);
                 byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
-                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
-                outPackets.put(datagramPacket);
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
+                addToSender(datagramPacket);
             } else {
                 int packetsCount = messageBytes.length / PACK_SIZE;
                 int rest = messageBytes.length - PACK_SIZE * packetsCount;
@@ -88,21 +90,47 @@ public class SimpleTcpClientSocket {
                     nextUUID = UUID.randomUUID();
                     dataMessage.setNextId(nextUUID);
                     byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
-                    DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
-                    outPackets.put(datagramPacket);
+                    DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
+                    addToSender(datagramPacket);
                 }
                 byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
                 DataMessage dataMessage = new DataMessage(data);
                 dataMessage.setId(nextUUID);
                 dataMessage.setNextId(null);
                 byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
-                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length);
-                outPackets.put(datagramPacket);
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
+                addToSender(datagramPacket);
             }
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
         } catch (IOException e) {
             System.out.println(e.getMessage());
+        }
+    }
+
+    public void sendLong(long value) {
+        try {
+            ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+            buffer.putLong(value);
+            byte[] bytes = buffer.array();
+            DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, new InetSocketAddress(inetAddress, port));
+            outPackets.put(datagramPacket);
+            System.out.println("Put packet: " + datagramPacket.toString() + " queue size = " + outPackets.size());
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
+        }
+    }
+
+    public void sendInt(int value) {
+        try {
+            ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+            buffer.putInt(value);
+            byte[] bytes = buffer.array();
+            DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, new InetSocketAddress(inetAddress, port));
+            outPackets.put(datagramPacket);
+            System.out.println("Put packet: " + datagramPacket.toString() + " queue size = " + outPackets.size());
+        } catch (InterruptedException e) {
+            System.out.println("Interrupted");
         }
     }
 
@@ -156,16 +184,29 @@ public class SimpleTcpClientSocket {
         return objectMapper.writeValueAsBytes(dataMessage);
     }
 
+    private void addToSender(DatagramPacket datagramPacket) throws InterruptedException {
+        outPackets.put(datagramPacket);
+        System.out.println("Put packet: " + datagramPacket.toString() + " queue size = " + outPackets.size());
+    }
+
     class Sender implements Runnable {
         @Override
         public void run() {
-            try {
-                DatagramPacket datagramPacket = outPackets.take();
-                datagramSocket.send(datagramPacket);
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted");
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
+            while (true) {
+                try {
+                    System.out.println("Sender works, queue size = " + outPackets.size());
+                    DatagramPacket datagramPacket = outPackets.poll(2, TimeUnit.SECONDS);
+                    if (datagramPacket != null) {
+                        datagramSocket.send(datagramPacket);
+                        System.out.println("Sending packet: " + datagramPacket.toString());
+                    }
+                } catch (InterruptedException e) {
+                    System.err.println("Interrupted");
+                    break;
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                    break;
+                }
             }
         }
     }
@@ -173,14 +214,16 @@ public class SimpleTcpClientSocket {
     class Receiver implements Runnable {
         @Override
         public void run() {
-            try {
-                DatagramPacket datagramPacket = new DatagramPacket(outBuffer, outBuffer.length);
-                datagramSocket.receive(datagramPacket);
-                inPackets.put(datagramPacket);
-            } catch (IOException e) {
-                System.out.println(e.getMessage());
-            } catch (InterruptedException e) {
-                System.out.println("Interrupted");
+            while (!Thread.interrupted()) {
+                try {
+                    DatagramPacket datagramPacket = new DatagramPacket(outBuffer, outBuffer.length);
+                    datagramSocket.receive(datagramPacket);
+                    inPackets.put(datagramPacket);
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                } catch (InterruptedException e) {
+                    System.err.println("Interrupted");
+                }
             }
         }
     }

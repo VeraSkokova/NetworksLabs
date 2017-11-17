@@ -14,6 +14,7 @@ import java.util.TimerTask;
 public class Server {
     public static final String DIR_NAME = "./uploads";
     public static final int PERIOD = 3000;
+    private SimpleTcpServerSocket serverSocket;
     private static int serverPort;
     private Thread acceptor;
 
@@ -28,6 +29,7 @@ public class Server {
         if (!uploadsDirectory.exists()) {
             uploadsDirectory.mkdir();
         }
+        serverSocket = new SimpleTcpServerSocket(serverPort);
         acceptor = new Thread(new AcceptorRunnable());
         acceptor.start();
     }
@@ -35,9 +37,7 @@ public class Server {
     class AcceptorRunnable implements Runnable {
         @Override
         public void run() {
-            SimpleTcpServerSocket serverSocket;
             //try {
-            serverSocket = new SimpleTcpServerSocket(serverPort);
             while (!Thread.interrupted()) {
                 SocketSimulator socket;
                 //try {

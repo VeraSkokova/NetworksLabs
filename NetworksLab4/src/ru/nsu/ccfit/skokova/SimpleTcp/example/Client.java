@@ -56,8 +56,8 @@ public class Client {
         File file = new File(fileName);
         long fileSize = file.length();
         System.out.println("Prepared file");
-        socket.send(new byte[]{new Long(fileSize).byteValue()});
-        socket.send(new byte[]{new Integer(fileName.length()).byteValue()});
+        socket.sendLong(fileSize);
+        socket.sendInt(fileName.length());
         socket.send(fileName.getBytes());
         FileInputStream fileInputStream = new FileInputStream(file);
         int read;
