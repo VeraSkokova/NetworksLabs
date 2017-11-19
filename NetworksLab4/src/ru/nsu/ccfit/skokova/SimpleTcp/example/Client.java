@@ -37,13 +37,14 @@ public class Client {
             String message = new String(response, StandardCharsets.UTF_8);
             System.out.println(message);
 
-            /*try {
+            try {
                 socket.close();
             } catch (IOException e) {
                 System.out.println(e.getMessage());
-            }*/
+            }
         } catch (Exception e) {
-            System.out.println("Error in connection to server: " + e.getMessage());
+            System.err.println("Error in connection to server: " + e.getMessage());
+            e.printStackTrace();
             System.exit(1);
         }
     }
@@ -60,7 +61,6 @@ public class Client {
         int read;
         byte[] buffer = new byte[BUFFER_SIZE];
         while ((read = fileInputStream.read(buffer, 0, buffer.length)) > 0) {
-            System.out.println("Buffer contains: " + new String(buffer, StandardCharsets.UTF_8));
             socket.send(buffer);
         }
         System.out.println("File was sent");

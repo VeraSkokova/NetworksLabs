@@ -5,27 +5,35 @@ import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.idGenerator.IdGenerator;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 
 public class SocketSimulator {
     private static final int PACK_SIZE = 64;
     private static final long LAST_MSG = -1;
+    private final IdGenerator idGenerator;
     private SimpleTcpServerSocket serverSocket;
     private String inetAddress;
     private int port;
-
-    private final IdGenerator idGenerator;
-
+    private InetSocketAddress inetSocketAddress;
     private BlockingQueue<DataMessage> messages = new PriorityBlockingQueue<>();
 
     public SocketSimulator(SimpleTcpServerSocket serverSocket, String inetAddress, int port) {
         this.serverSocket = serverSocket;
         this.inetAddress = inetAddress;
         this.port = port;
+        this.inetSocketAddress = new InetSocketAddress(inetAddress, port);
+        this.idGenerator = new IdGenerator();
+    }
+
+    public SocketSimulator(SimpleTcpServerSocket serverSocket, InetSocketAddress inetSocketAddress) {
+        this.serverSocket = serverSocket;
+        this.inetSocketAddress = inetSocketAddress;
+        this.port = inetSocketAddress.getPort();
+        this.inetAddress = inetSocketAddress.getHostName();
         this.idGenerator = new IdGenerator();
     }
 
@@ -121,7 +129,6 @@ public class SocketSimulator {
 
         SocketSimulator that = (SocketSimulator) o;
 
-        if (port != that.port) return false;
         if (serverSocket != null ? !serverSocket.equals(that.serverSocket) : that.serverSocket != null) return false;
         return inetAddress != null ? inetAddress.equals(that.inetAddress) : that.inetAddress == null;
     }
@@ -130,13 +137,14 @@ public class SocketSimulator {
     public int hashCode() {
         int result = serverSocket != null ? serverSocket.hashCode() : 0;
         result = 31 * result + (inetAddress != null ? inetAddress.hashCode() : 0);
-        result = 31 * result + port;
         return result;
     }
 
     void addMessage(DataMessage dataMessage) {
         try {
-            messages.put(dataMessage);
+            if (!messages.contains(dataMessage)) {
+                messages.put(dataMessage);
+            }
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
         }

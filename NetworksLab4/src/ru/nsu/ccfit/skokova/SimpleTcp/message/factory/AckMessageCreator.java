@@ -2,15 +2,14 @@ package ru.nsu.ccfit.skokova.SimpleTcp.message.factory;
 
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonToken;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.DisconnectMessage;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.AckMessage;
 
 import java.io.IOException;
 
-public class DisconnectMessageCreator extends MessageCreator {
+public class AckMessageCreator extends MessageCreator {
     @Override
-    DisconnectMessage createMessage(JsonParser jsonParser) {
-        DisconnectMessage disconnectMessage = new DisconnectMessage();
+    AckMessage createMessage(JsonParser jsonParser) {
+        AckMessage ackMessage = new AckMessage(-1);
         try {
             while (!jsonParser.isClosed()) {
                 JsonToken jsonToken = jsonParser.nextToken();
@@ -20,15 +19,15 @@ public class DisconnectMessageCreator extends MessageCreator {
 
                     jsonToken = jsonParser.nextToken();
 
-                    if ("id".equals(fieldName)) {
-                        Long id = Long.parseLong(jsonParser.getText());
-                        disconnectMessage.setId(id);
+                    if ("ackId".equals(fieldName)) {
+                        Long ackId = Long.parseLong(jsonParser.getText());
+                        ackMessage.setAckId(ackId);
                     }
                 }
             }
         } catch (IOException e) {
 
         }
-        return disconnectMessage;
+        return ackMessage;
     }
 }

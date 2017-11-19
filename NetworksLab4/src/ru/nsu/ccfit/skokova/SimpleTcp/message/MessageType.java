@@ -8,5 +8,7 @@ public enum MessageType {
     @JsonProperty("DATA")
     DATA,
     @JsonProperty("DISCONNECT")
-    DISCONNECT
+    DISCONNECT,
+    @JsonProperty("ACK")
+    ACK
 }

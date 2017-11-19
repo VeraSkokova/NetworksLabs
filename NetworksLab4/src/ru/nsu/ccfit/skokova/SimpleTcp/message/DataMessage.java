@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @JsonPropertyOrder({"messageType", "data", "id", "nextId"})
 public class DataMessage extends Message {
-    @JsonProperty("data")
+    @JsonProperty("dataLength")
     private byte[] data;
     private long nextId;
 

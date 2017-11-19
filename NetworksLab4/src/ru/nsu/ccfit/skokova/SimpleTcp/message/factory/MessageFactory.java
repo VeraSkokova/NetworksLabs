@@ -14,6 +14,7 @@ public class MessageFactory {
         MESSAGE_CREATORS.put(MessageType.CONNECT.name(), ConnectMessageCreator.class);
         MESSAGE_CREATORS.put(MessageType.DATA.name(), DataMessageCreator.class);
         MESSAGE_CREATORS.put(MessageType.DISCONNECT.name(), DisconnectMessageCreator.class);
+        MESSAGE_CREATORS.put(MessageType.ACK.name(), AckMessageCreator.class);
     }
 
     public static Message createMessage(String name, JsonParser jsonParser) throws IllegalAccessException, InstantiationException {
