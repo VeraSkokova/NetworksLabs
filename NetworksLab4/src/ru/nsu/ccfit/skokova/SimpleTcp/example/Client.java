@@ -12,8 +12,6 @@ public class Client {
     private static String serverName;
     private static int serverPort;
     private SimpleTcpClientSocket socket;
-    private DataInputStream dataInputStream;
-    private DataOutputStream dataOutputStream;
 
     public static void main(String[] args) {
         filePath = args[0];
@@ -24,11 +22,10 @@ public class Client {
     }
 
     private void start() {
-        socket = new SimpleTcpClientSocket();
-        socket.connect(serverName, serverPort);
-        System.out.println("Connected");
         try {
-            socket = new SimpleTcpClientSocket(serverName, serverPort);
+            socket = new SimpleTcpClientSocket();
+            socket.connect(serverName, serverPort);
+            System.out.println("Connected");
 
             sendFile();
 
@@ -63,6 +60,7 @@ public class Client {
         int read;
         byte[] buffer = new byte[BUFFER_SIZE];
         while ((read = fileInputStream.read(buffer, 0, buffer.length)) > 0) {
+            System.out.println("Buffer contains: " + new String(buffer, StandardCharsets.UTF_8));
             socket.send(buffer);
         }
         System.out.println("File was sent");

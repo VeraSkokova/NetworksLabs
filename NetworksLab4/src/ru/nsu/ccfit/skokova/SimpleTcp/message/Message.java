@@ -3,22 +3,20 @@ package ru.nsu.ccfit.skokova.SimpleTcp.message;
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.map.annotate.JsonDeserialize;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.serialization.MessageDeserializer;
 
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @JsonDeserialize(using = MessageDeserializer.class)
-public abstract class Message implements Comparable<Message>{
+public abstract class Message implements Comparable<Message> {
     protected MessageType messageType;
-    protected static final AtomicInteger ID = new AtomicInteger(1);
     @JsonProperty("id")
-    protected UUID id;
+    protected long id;
     protected String hostName;
     protected int port;
 
     @JsonCreator
     public Message() {
-        this.id = UUID.randomUUID();
     }
 
     public MessageType getMessageType() {
@@ -45,8 +43,12 @@ public abstract class Message implements Comparable<Message>{
         this.port = port;
     }
 
-    public UUID getId() {
+    public long getId() {
         return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 
     @Override
@@ -61,11 +63,11 @@ public abstract class Message implements Comparable<Message>{
 
     @Override
     public int hashCode() {
-        return id != null ? id.hashCode() : 0;
+        return (int) (id ^ (id >>> 32));
     }
 
     @Override
     public int compareTo(Message message) {
-        return id.compareTo(message.id);
+        return (int) (id - message.id);
     }
 }

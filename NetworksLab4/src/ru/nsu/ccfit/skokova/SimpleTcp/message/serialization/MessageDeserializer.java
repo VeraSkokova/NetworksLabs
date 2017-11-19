@@ -1,10 +1,11 @@
-package ru.nsu.ccfit.skokova.SimpleTcp.message;
+package ru.nsu.ccfit.skokova.SimpleTcp.message.serialization;
 
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonProcessingException;
 import org.codehaus.jackson.JsonToken;
 import org.codehaus.jackson.map.DeserializationContext;
 import org.codehaus.jackson.map.JsonDeserializer;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.factory.MessageFactory;
 
 import java.io.IOException;

@@ -10,21 +10,26 @@ import java.util.UUID;
 public class DataMessage extends Message {
     @JsonProperty("data")
     private byte[] data;
-    private UUID nextId;
+    private long nextId;
 
     public DataMessage() {
         this.messageType = MessageType.DATA;
     }
 
     @JsonCreator
-    public DataMessage(@JsonProperty("data") byte[] data) {
+    public DataMessage(@JsonProperty("data") byte[] data, String hostName, int port) {
         this();
+        this.hostName = hostName;
+        this.port = port;
         this.data = data;
+        this.nextId = -1;
     }
 
     @JsonCreator
-    public DataMessage(@JsonProperty("data") byte[] data, @JsonProperty("nextId") UUID nextId) {
+    public DataMessage(@JsonProperty("data") byte[] data, @JsonProperty("nextId") long nextId, String hostName, int port) {
         this();
+        this.hostName = hostName;
+        this.port = port;
         this.data = data;
         this.nextId = nextId;
     }
@@ -37,15 +42,15 @@ public class DataMessage extends Message {
         this.data = data;
     }
 
-    public UUID getNextId() {
+    public long getNextId() {
         return nextId;
     }
 
-    public void setNextId(UUID nextId) {
+    public void setNextId(long nextId) {
         this.nextId = nextId;
     }
 
-    public void setId(UUID uuid) {
+    public void setId(long uuid) {
         this.id = uuid;
     }
 }

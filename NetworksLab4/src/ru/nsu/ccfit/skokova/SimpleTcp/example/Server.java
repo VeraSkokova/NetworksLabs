@@ -14,8 +14,8 @@ import java.util.TimerTask;
 public class Server {
     public static final String DIR_NAME = "./uploads";
     public static final int PERIOD = 3000;
-    private SimpleTcpServerSocket serverSocket;
     private static int serverPort;
+    private SimpleTcpServerSocket serverSocket;
     private Thread acceptor;
 
     public static void main(String[] args) {
@@ -82,21 +82,17 @@ class ConnectedClient {
             try {
                 System.out.println("Running handler");
 
-                byte[] fileSizeByte = new byte[Long.BYTES];
-                socket.receive(fileSizeByte, 0, Long.BYTES);
-                long fileSize = Long.valueOf(new String(fileSizeByte, StandardCharsets.UTF_8));
+                long fileSize = socket.receiveLong();
                 System.out.println("FileSize: " + fileSize);
 
-                byte[] fileNameByte = new byte[Integer.BYTES];
-                socket.receive(fileNameByte, 0, Integer.BYTES);
-                int fileNameSize = Integer.valueOf(new String(fileNameByte, StandardCharsets.UTF_8));
+                int fileNameSize = socket.receiveInt();
                 System.out.println("FileNameSize: " + fileNameSize);
 
                 int read = 0;
                 byte[] stringBuffer = new byte[fileNameSize];
                 int totalFileNameRead = 0;
                 while (totalFileNameRead < fileNameSize) {
-                    totalFileNameRead += socket.receive(stringBuffer,totalFileNameRead, fileNameSize - totalFileNameRead);
+                    totalFileNameRead += socket.receive(stringBuffer, totalFileNameRead, fileNameSize - totalFileNameRead);
                 }
                 String fileName = new String(stringBuffer, StandardCharsets.UTF_8);
 
@@ -113,37 +109,40 @@ class ConnectedClient {
                     byte[] buffer = new byte[BUF_SIZE];
 
                     synchronized (this) {
-                        while ((totalRead < fileSize)) //&& ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
-                            outputStream.write(buffer, 0, read);
+                        while (totalRead < fileSize) { //&& ((read = dataInputStream.read(buffer, 0, buffer.length)) != -1)) {
+                            read = socket.receive(buffer, totalRead, fileSize - totalRead);
+                            System.out.println("Buffer contains: " + new String(buffer, StandardCharsets.UTF_8));
+                            outputStream.write(buffer, (int) totalRead, (int) (fileSize - read));
                             totalRead += read;
                             outputStream.flush();
                         }
                     }
-
-                    String response;
-
-                    if (fileSize == totalRead) {
-                        response = "Success!";
-                        System.out.println("Wrote file to directory");
-                    } else {
-                        response = "Error!";
-                        System.out.println("Problem with saving file");
-                    }
-
-                    socket.send(response.getBytes());
-                    timer.cancel();
-                } catch (IOException e) {
-                    System.out.println(e.getMessage());
                 }
 
+                String response;
 
+                if (fileSize == totalRead) {
+                    response = "Success!";
+                    System.out.println("Wrote file to directory");
+                } else {
+                    response = "Error!";
+                    System.out.println("Problem with saving file");
+                }
+
+                socket.send(response.getBytes());
+                timer.cancel();
+            } catch (IOException e) {
+                System.out.println(e.getMessage());
             }
+
+
+        }
 
         synchronized long getTotalRead() {
             return totalRead;
         }
-        }
     }
+}
 
 
 class SpeedMeter extends TimerTask {
