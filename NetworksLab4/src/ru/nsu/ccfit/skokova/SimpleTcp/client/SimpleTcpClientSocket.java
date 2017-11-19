@@ -17,7 +17,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class SimpleTcpClientSocket {
     private static final int BUF_SIZE = 256;
     private static final int QUEUE_SIZE = 1024;
-    private static final int PACK_SIZE = 64;
+    private static final int PACK_SIZE = 256;
     private static final long LAST_MSG = -1;
     private static final int SLEEP_TIME = 2000;
     private DatagramSocket datagramSocket;
