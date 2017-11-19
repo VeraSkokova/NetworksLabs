@@ -6,32 +6,40 @@ import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
 import java.util.UUID;
 
-@JsonPropertyOrder({"messageType", "dataLength", "id", "nextId"})
+@JsonPropertyOrder({"messageType", "data", "id", "nextId"})
 public class DataMessage extends Message {
-    private long nextId;
     @JsonProperty("dataLength")
-    private int dataLength;
+    private byte[] data;
+    private long nextId;
 
     public DataMessage() {
         this.messageType = MessageType.DATA;
     }
 
     @JsonCreator
-    public DataMessage(String hostName, int port, int dataLength) {
+    public DataMessage(@JsonProperty("data") byte[] data, String hostName, int port) {
         this();
         this.hostName = hostName;
         this.port = port;
+        this.data = data;
         this.nextId = -1;
-        this.dataLength = dataLength;
     }
 
     @JsonCreator
-    public DataMessage(@JsonProperty("nextId") long nextId, String hostName, int port, int dataLength) {
+    public DataMessage(@JsonProperty("data") byte[] data, @JsonProperty("nextId") long nextId, String hostName, int port) {
         this();
         this.hostName = hostName;
         this.port = port;
+        this.data = data;
         this.nextId = nextId;
-        this.dataLength = dataLength;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
     }
 
     public long getNextId() {
@@ -44,13 +52,5 @@ public class DataMessage extends Message {
 
     public void setId(long uuid) {
         this.id = uuid;
-    }
-
-    public int getDataLength() {
-        return dataLength;
-    }
-
-    public void setDataLength(int dataLength) {
-        this.dataLength = dataLength;
     }
 }

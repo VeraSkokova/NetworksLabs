@@ -20,8 +20,9 @@ public class DataMessageCreator extends MessageCreator {
 
                     jsonToken = jsonParser.nextToken();
 
-                    if ("dataLength".equals(fieldName)) {
-                        dataMessage.setDataLength(Integer.parseInt(jsonParser.getText()));
+                    if ("data".equals(fieldName)) {
+                        byte[] data = jsonParser.readValueAs(byte[].class);
+                        dataMessage.setData(data);
                     } else if ("hostName".equals(fieldName)) {
                         String hostName = jsonParser.getText();
                         dataMessage.setHostName(hostName);

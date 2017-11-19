@@ -5,7 +5,6 @@ import ru.nsu.ccfit.skokova.SimpleTcp.message.AckMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.ConnectMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.utils.MessageUtils;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -138,8 +137,7 @@ public class SimpleTcpServerSocket {
         private void process(byte[] bytes, int port, String hostName) {
             try {
                 ObjectMapper objectMapper = new ObjectMapper();
-                //Message message = objectMapper.readValue(bytes, Message.class);
-                Message message = MessageUtils.getHeader(bytes);
+                Message message = objectMapper.readValue(bytes, Message.class);
                 if (message.getClass().getSimpleName().equals("ConnectMessage")) { //TODO : rewrite
                     ConnectMessage connectMessage = (ConnectMessage) message;
                     InetSocketAddress inetSocketAddress = new InetSocketAddress(hostName, port);
@@ -150,8 +148,7 @@ public class SimpleTcpServerSocket {
                     System.out.println(dataMessageString);*/
                     SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
                     int receiverIndex = socketSimulators.indexOf(tempSocketSimulator);
-                    DataWrapper dataWrapper = new DataWrapper(dataMessage, MessageUtils.getData(bytes, bytes[0], dataMessage.getDataLength()));
-                    socketSimulators.get(receiverIndex).addMessage(dataWrapper);
+                    socketSimulators.get(receiverIndex).addMessage(dataMessage);
                 } else if (message.getClass().getSimpleName().equals("DisconnectMessage")) {
                     SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
                     int receiverIndex = socketSimulators.indexOf(tempSocketSimulator);

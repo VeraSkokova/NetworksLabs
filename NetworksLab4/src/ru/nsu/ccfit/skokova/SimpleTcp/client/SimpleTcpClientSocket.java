@@ -3,7 +3,6 @@ package ru.nsu.ccfit.skokova.SimpleTcp.client;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.*;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.idGenerator.IdGenerator;
-import ru.nsu.ccfit.skokova.SimpleTcp.message.utils.MessageUtils;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -11,6 +10,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -63,9 +63,8 @@ public class SimpleTcpClientSocket {
             Message message = new ConnectMessage(myAddress, myPort);
             message.setId(idGenerator.newId());
             ObjectMapper objectMapper = new ObjectMapper();
-            byte[] header = objectMapper.writeValueAsBytes(message);
-            byte[] msgBytes = MessageUtils.createServiceMessage(header);
-            DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+            byte[] messageBytes = objectMapper.writeValueAsBytes(message);
+            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(inetAddress, port));
             addToSender(datagramPacket);
             System.out.println("Connecting");
         } catch (InterruptedException e) {
@@ -79,12 +78,11 @@ public class SimpleTcpClientSocket {
         ObjectMapper objectMapper = new ObjectMapper();
         try {
             if (messageBytes.length < PACK_SIZE) {
-                DataMessage dataMessage = new DataMessage(myAddress, myPort, messageBytes.length);
+                DataMessage dataMessage = new DataMessage(messageBytes, myAddress, myPort);
                 dataMessage.setId(idGenerator.newId());
-                byte[] header = objectMapper.writeValueAsBytes(dataMessage);
-                byte[] msgBytes = MessageUtils.createDataMessage(header, messageBytes);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
                 //System.out.println("Sending " + msg.toString());
-                DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
                 addToSender(datagramPacket);
             } else {
                 int packetsCount = messageBytes.length / PACK_SIZE;
@@ -93,27 +91,22 @@ public class SimpleTcpClientSocket {
                 long nextUUID = idGenerator.newId();
                 for (i = 0; i < packetsCount * PACK_SIZE; i += PACK_SIZE) {
                     byte[] data = Arrays.copyOfRange(messageBytes, i, i + PACK_SIZE - 1);
-                    DataMessage dataMessage = new DataMessage(myAddress, myPort, data.length);
+                    DataMessage dataMessage = new DataMessage(data, myAddress, myPort);
                     dataMessage.setId(nextUUID);
                     nextUUID = idGenerator.newId();
                     dataMessage.setNextId(nextUUID);
-                    byte[] header = objectMapper.writeValueAsBytes(dataMessage);
-                    byte[] msgBytes = MessageUtils.createDataMessage(header, data);
+                    byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
                     //System.out.println("Sending " + msg.toString());
-                    DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+                    DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
                     addToSender(datagramPacket);
                 }
                 byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
-                DataMessage dataMessage = new DataMessage(myAddress, myPort, data.length);
+                DataMessage dataMessage = new DataMessage(data, myAddress, myPort);
                 dataMessage.setId(nextUUID);
                 dataMessage.setNextId(LAST_MSG);
-                byte[] header = objectMapper.writeValueAsBytes(dataMessage);
+                byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
                 //System.out.println("Sending " + msg.toString());
-                byte[] msgBytes = new byte[1 + header.length + data.length];
-                msgBytes[0] = (byte) header.length;
-                MessageUtils.fillMessageBytes(msgBytes, 1, header);
-                MessageUtils.fillMessageBytes(msgBytes, 1 + header.length, data);
-                DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+                DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
                 addToSender(datagramPacket);
             }
         } catch (InterruptedException e) {
@@ -128,12 +121,11 @@ public class SimpleTcpClientSocket {
             ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
             buffer.putLong(value);
             byte[] bytes = buffer.array();
-            DataMessage dataMessage = new DataMessage(myAddress, myPort, bytes.length);
+            DataMessage dataMessage = new DataMessage(bytes, myAddress, myPort);
             dataMessage.setId(idGenerator.newId());
             ObjectMapper objectMapper = new ObjectMapper();
-            byte[] header = objectMapper.writeValueAsBytes(dataMessage);
-            byte[] msgBytes = MessageUtils.createDataMessage(header, bytes);
-            DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+            byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+            DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
             addToSender(datagramPacket);
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
@@ -147,12 +139,11 @@ public class SimpleTcpClientSocket {
             ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
             buffer.putInt(value);
             byte[] bytes = buffer.array();
-            DataMessage dataMessage = new DataMessage(myAddress, myPort, bytes.length);
+            DataMessage dataMessage = new DataMessage(bytes, myAddress, myPort);
             dataMessage.setId(idGenerator.newId());
             ObjectMapper objectMapper = new ObjectMapper();
-            byte[] header = objectMapper.writeValueAsBytes(dataMessage);
-            byte[] msgBytes = MessageUtils.createDataMessage(header, bytes);
-            DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+            byte[] msg = objectMapper.writeValueAsBytes(dataMessage);
+            DatagramPacket datagramPacket = new DatagramPacket(msg, msg.length, new InetSocketAddress(inetAddress, port));
             addToSender(datagramPacket);
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
@@ -168,15 +159,12 @@ public class SimpleTcpClientSocket {
         try {
             DatagramPacket datagramPacket = inPackets.take();
             messageBytes = datagramPacket.getData();
-            int headerLength = messageBytes[0];
-            byte[] header = Arrays.copyOfRange(messageBytes, 1, headerLength + 1);
             ObjectMapper objectMapper = new ObjectMapper();
-            Message message = MessageUtils.getHeader(header);
+            Message message = objectMapper.readValue(messageBytes, Message.class);
             if (message.getClass().getSimpleName().equals("DataMessage")) { //TODO : rewrite
                 dataMessage = (DataMessage) message;
                 long nextUuid = dataMessage.getNextId();
-                byte[] data = Arrays.copyOfRange(messageBytes, 1 + headerLength, messageBytes.length);
-                for (byte b : data) {
+                for (byte b : dataMessage.getData()) {
                     result[startOffset] = b;
                     startOffset++;
                     count++;
@@ -184,15 +172,12 @@ public class SimpleTcpClientSocket {
                 while (dataMessage.getNextId() != LAST_MSG) {
                     DatagramPacket packet = inPackets.take();
                     messageBytes = packet.getData();
-                    headerLength = messageBytes[0];
-                    header = Arrays.copyOfRange(messageBytes, 1, headerLength + 1);
-                    dataMessage = (DataMessage) objectMapper.readValue(header, Message.class);
-                    data = Arrays.copyOfRange(messageBytes, 1 + headerLength, messageBytes.length);
+                    dataMessage = (DataMessage) objectMapper.readValue(new String(messageBytes, StandardCharsets.UTF_8), Message.class);
                     if (dataMessage.getId() != nextUuid) {
                         continue;
                     }
                     nextUuid = dataMessage.getNextId();
-                    for (byte b : data) {
+                    for (byte b : dataMessage.getData()) {
                         result[startOffset] = b;
                         startOffset++;
                         count++;
@@ -213,9 +198,8 @@ public class SimpleTcpClientSocket {
             long disconnectMessageId = idGenerator.newId();
             disconnectMessage.setId(disconnectMessageId);
             ObjectMapper objectMapper = new ObjectMapper();
-            byte[] header = objectMapper.writeValueAsBytes(disconnectMessage);
-            byte[] msgBytes = MessageUtils.createServiceMessage(header);
-            DatagramPacket datagramPacket = new DatagramPacket(msgBytes, msgBytes.length, new InetSocketAddress(inetAddress, port));
+            byte[] messageBytes = objectMapper.writeValueAsBytes(disconnectMessage);
+            DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(inetAddress, port));
             addToSender(datagramPacket);
             while (true) {
                 DatagramPacket ackPacket = inPackets.peek();
@@ -224,7 +208,7 @@ public class SimpleTcpClientSocket {
                     continue;
                 }
                 byte[] ackMessageBytes = ackPacket.getData();
-                Message message = MessageUtils.getHeader(ackMessageBytes);
+                Message message = objectMapper.readValue(ackMessageBytes, Message.class);
                 if (message.getClass().getSimpleName().equals("AckMessage")) {
                     AckMessage ackMessage = (AckMessage) message;
                     if (ackMessage.getAckId() == disconnectMessageId) {
@@ -240,6 +224,12 @@ public class SimpleTcpClientSocket {
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
         }
+    }
+
+    private byte[] wrapBytes(byte[] bytes) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        DataMessage dataMessage = new DataMessage(bytes, myAddress, myPort);
+        return objectMapper.writeValueAsBytes(dataMessage);
     }
 
     private void addToSender(DatagramPacket datagramPacket) throws InterruptedException {
