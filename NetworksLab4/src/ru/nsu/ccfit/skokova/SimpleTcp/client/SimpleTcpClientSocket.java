@@ -286,7 +286,7 @@ public class SimpleTcpClientSocket {
             Message message = new ObjectMapper().readValue(packetData, Message.class);
             if (message.getClass().getSimpleName().equals("AckMessage")) {
                 AckMessage ackMessage = (AckMessage) message;
-                Message msg = new ConnectMessage();
+                Message msg = new Message();
                 msg.setId(ackMessage.getAckId());
                 msg.setTime(msg.getTime());
                 outMessages.remove(msg);

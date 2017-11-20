@@ -16,12 +16,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class SimpleTcpServerSocket {
     private static final int QUEUE_SIZE = 256;
     private static final int PACK_SIZE = 1024;
+    private static final long SEND_TIME_DIFF = 2000;
 
     private int port;
     private DatagramSocket datagramServerSocket;
 
     private BlockingQueue<InetSocketAddress> incomingRequests = new ArrayBlockingQueue<>(QUEUE_SIZE);
-    private BlockingQueue<DatagramPacket> outPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private BlockingQueue<Message> outMessages = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private BlockingQueue<DatagramPacket> inPackets = new ArrayBlockingQueue<>(QUEUE_SIZE);
     private List<SocketSimulator> socketSimulators = new CopyOnWriteArrayList<>();
 
@@ -57,8 +58,8 @@ public class SimpleTcpServerSocket {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
             Message message = objectMapper.readValue(data, Message.class);
-            DatagramPacket datagramPacket = new DatagramPacket(data, data.length, new InetSocketAddress(message.getHostName(), message.getPort()));
-            outPackets.put(datagramPacket);
+            //DatagramPacket datagramPacket = new DatagramPacket(data, data.length, new InetSocketAddress(message.getHostName(), message.getPort()));
+            outMessages.put(message);
         } catch (InterruptedException e) {
             System.out.println("Interrupted");
         } catch (IOException e) {
@@ -73,9 +74,16 @@ public class SimpleTcpServerSocket {
     private void sendAck(Message message, String hostName, int port, ObjectMapper objectMapper) throws IOException, InterruptedException {
         AckMessage ackMessage = new AckMessage(message.getId());
         ackMessage.setTime(message.getTime());
-        byte[] messageBytes = objectMapper.writeValueAsBytes(ackMessage);
-        DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(hostName, port));
-        outPackets.put(datagramPacket);
+        ackMessage.setPort(port);
+        ackMessage.setHostName(hostName);
+        /*byte[] messageBytes = objectMapper.writeValueAsBytes(ackMessage);
+        DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(hostName, port));*/
+        outMessages.put(ackMessage);
+    }
+
+    private DatagramPacket wrapMessage(Message message) throws IOException {
+        byte[] messageBytes = new ObjectMapper().writeValueAsBytes(message);
+        return new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(message.getHostName(), message.getPort()));
     }
 
     @Override
@@ -98,8 +106,14 @@ public class SimpleTcpServerSocket {
         public void run() {
             while (!Thread.interrupted()) {
                 try {
-                    DatagramPacket datagramPacket = outPackets.take();
-                    datagramServerSocket.send(datagramPacket);
+                    Message message = outMessages.take();
+                    long now = System.currentTimeMillis();
+                    if (now - message.getLastAttempt() > SEND_TIME_DIFF) {
+                        DatagramPacket datagramPacket = wrapMessage(message);
+                        datagramServerSocket.send(datagramPacket);
+                        message.setLastAttempt(now);
+                    }
+                    outMessages.put(message);
                 } catch (InterruptedException e) {
                     System.out.println("Interrupted");
                 } catch (IOException e) {
@@ -129,6 +143,8 @@ public class SimpleTcpServerSocket {
             try {
                 ObjectMapper objectMapper = new ObjectMapper();
                 Message message = objectMapper.readValue(bytes, Message.class);
+                message.setHostName(hostName);
+                message.setPort(port);
                 if (message.getClass().getSimpleName().equals("ConnectMessage")) { //TODO : rewrite
                     ConnectMessage connectMessage = (ConnectMessage) message;
                     InetSocketAddress inetSocketAddress = new InetSocketAddress(hostName, port);
@@ -155,6 +171,12 @@ public class SimpleTcpServerSocket {
                         sendAck(message, hostName, port, objectMapper);
                         socketSimulators.remove(receiverIndex);
                     }
+                } else if (message.getClass().getSimpleName().equals("AckMessage")) {
+                    AckMessage ackMessage = (AckMessage) message;
+                    Message msg = new Message();
+                    msg.setId(ackMessage.getAckId());
+                    msg.setTime(msg.getTime());
+                    outMessages.remove(msg);
                 }
             } catch (IOException e) {
                 System.err.println(e.getMessage());
