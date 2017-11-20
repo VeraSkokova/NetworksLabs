@@ -6,7 +6,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 
 public class Client {
-    private static final int BUFFER_SIZE = 1024;
+    private static final int BUFFER_SIZE = 256;
     private static final int RESPONSE_SIZE = 8;
     private static String filePath;
     private static String serverName;

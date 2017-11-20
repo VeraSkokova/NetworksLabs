@@ -7,10 +7,7 @@ import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -69,21 +66,13 @@ public class SimpleTcpServerSocket {
         }
     }
 
-    public TreeSet<DataMessage> receive(SocketSimulator socketSimulator) {
-        TreeSet<DataMessage> result = new TreeSet<>();
-        return result;
-        /*ArrayList<Byte> messageBytes = new ArrayList<>();
-        for (DataMessage message : bytesForSockets.get(socketSimulator)) {
-            for (byte b : message.getData()) {
-                messageBytes.add(b);
-            }
-        }
-        Byte[] bytes = messageBytes.toArray(new Byte[bytesForSockets.get(socketSimulator).size()]);
-        return ArrayUtils.toPrimitive(bytes);*/
+    public void setTimeout(int timeout) throws SocketException {
+        datagramServerSocket.setSoTimeout(timeout);
     }
 
-    private void sendAck(long ackId, String hostName, int port, ObjectMapper objectMapper) throws IOException, InterruptedException {
-        AckMessage ackMessage = new AckMessage(ackId);
+    private void sendAck(Message message, String hostName, int port, ObjectMapper objectMapper) throws IOException, InterruptedException {
+        AckMessage ackMessage = new AckMessage(message.getId());
+        ackMessage.setTime(message.getTime());
         byte[] messageBytes = objectMapper.writeValueAsBytes(ackMessage);
         DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(hostName, port));
         outPackets.put(datagramPacket);
@@ -128,8 +117,10 @@ public class SimpleTcpServerSocket {
                     DatagramPacket datagramPacket = new DatagramPacket(new byte[PACK_SIZE], PACK_SIZE);
                     datagramServerSocket.receive(datagramPacket);
                     process(datagramPacket);
+                } catch (SocketTimeoutException e) {
+                    System.err.println("Timeout Exceeded");
                 } catch (IOException e) {
-                    System.out.println(e.getMessage());
+                    System.err.println(e.getMessage());
                 }
             }
         }
@@ -141,19 +132,29 @@ public class SimpleTcpServerSocket {
                 if (message.getClass().getSimpleName().equals("ConnectMessage")) { //TODO : rewrite
                     ConnectMessage connectMessage = (ConnectMessage) message;
                     InetSocketAddress inetSocketAddress = new InetSocketAddress(hostName, port);
-                    incomingRequests.put(inetSocketAddress);
+                    SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
+                    if (!socketSimulators.contains(tempSocketSimulator)) {
+                        incomingRequests.put(inetSocketAddress);
+                    }
+                    sendAck(connectMessage, hostName, port, objectMapper);
                 } else if (message.getClass().getSimpleName().equals("DataMessage")) {
                     DataMessage dataMessage = (DataMessage) message;
                     /*String dataMessageString = objectMapper.writeValueAsString(dataMessage);
                     System.out.println(dataMessageString);*/
+                    dataMessage.setPort(port);
+                    dataMessage.setHostName(hostName);
                     SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
                     int receiverIndex = socketSimulators.indexOf(tempSocketSimulator);
-                    socketSimulators.get(receiverIndex).addMessage(dataMessage);
+                    if (receiverIndex != -1) {
+                        socketSimulators.get(receiverIndex).addMessage(dataMessage);
+                    }
                 } else if (message.getClass().getSimpleName().equals("DisconnectMessage")) {
                     SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
                     int receiverIndex = socketSimulators.indexOf(tempSocketSimulator);
-                    sendAck(message.getId(), hostName, port, objectMapper);
-                    socketSimulators.remove(receiverIndex);
+                    if (receiverIndex != -1) {
+                        sendAck(message, hostName, port, objectMapper);
+                        socketSimulators.remove(receiverIndex);
+                    }
                 }
             } catch (IOException e) {
                 System.err.println(e.getMessage());

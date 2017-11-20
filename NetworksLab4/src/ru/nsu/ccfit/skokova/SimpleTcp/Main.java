@@ -34,7 +34,9 @@ public class Main { //Sandbox
             bytes[5] = 4;
             bytes[6] = 1;
 
-            DataMessage message = new DataMessage(bytes, "127.0.0.1", 3248);
+            DataMessage message = new DataMessage(bytes);
+            message.setHostName("127.0.0.`");
+            message.setPort(3248);
             message.setId(idGenerator.newId());
             message.setNextId(idGenerator.newId());
             String messageString = objectMapper.writeValueAsString(message);

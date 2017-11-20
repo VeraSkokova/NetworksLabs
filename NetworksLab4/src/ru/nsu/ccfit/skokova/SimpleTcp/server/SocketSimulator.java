@@ -1,7 +1,9 @@
 package ru.nsu.ccfit.skokova.SimpleTcp.server;
 
 import org.codehaus.jackson.map.ObjectMapper;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.AckMessage;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.DataMessage;
+import ru.nsu.ccfit.skokova.SimpleTcp.message.Message;
 import ru.nsu.ccfit.skokova.SimpleTcp.message.idGenerator.IdGenerator;
 
 import java.io.IOException;
@@ -41,7 +43,7 @@ public class SocketSimulator {
         ObjectMapper objectMapper = new ObjectMapper();
         try {
             if (messageBytes.length < PACK_SIZE) {
-                DataMessage dataMessage = new DataMessage(messageBytes, inetAddress, port);
+                DataMessage dataMessage = new DataMessage(messageBytes);
                 dataMessage.setHostName(inetAddress);
                 dataMessage.setPort(port);
                 dataMessage.setNextId(LAST_MSG);
@@ -54,7 +56,7 @@ public class SocketSimulator {
                 long nextUUID = idGenerator.newId();
                 for (i = 0; i < packetsCount * PACK_SIZE; i += PACK_SIZE) {
                     byte[] data = Arrays.copyOfRange(messageBytes, i, i + PACK_SIZE - 1);
-                    DataMessage dataMessage = new DataMessage(data, inetAddress, port);
+                    DataMessage dataMessage = new DataMessage(data);
                     dataMessage.setHostName(inetAddress);
                     dataMessage.setPort(port);
                     dataMessage.setId(nextUUID);
@@ -64,7 +66,7 @@ public class SocketSimulator {
                     serverSocket.send(msg);
                 }
                 byte[] data = Arrays.copyOfRange(messageBytes, i, i + rest);
-                DataMessage dataMessage = new DataMessage(data, inetAddress, port);
+                DataMessage dataMessage = new DataMessage(data);
                 dataMessage.setHostName(inetAddress);
                 dataMessage.setPort(port);
                 dataMessage.setId(nextUUID);
@@ -82,6 +84,7 @@ public class SocketSimulator {
         try {
             do {
                 DataMessage dataMessage = messages.take();
+                sendAck(dataMessage, dataMessage.getHostName(), dataMessage.getPort());
                 byte[] bytes = dataMessage.getData();
                 for (byte b : bytes) {
                     result[(int) startOffset] = b;
@@ -94,6 +97,8 @@ public class SocketSimulator {
             } while ((messages.peek() != null) && (messages.peek().getNextId() != LAST_MSG) && (count < length));
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
         }
         return count;
     }
@@ -101,11 +106,21 @@ public class SocketSimulator {
     public long receiveLong() {
         ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
         try {
-            byte[] bytes = messages.take().getData();
-            buffer.put(bytes);
-            buffer.flip();//need flip
+            while (true) {
+                DataMessage dataMessage = messages.take();
+                byte[] bytes = dataMessage.getData();
+                if (bytes.length == Long.BYTES) {
+                    buffer.put(bytes);
+                    buffer.flip();//need flip
+                    sendAck(dataMessage, dataMessage.getHostName(), dataMessage.getPort());
+                    break;
+                }
+                messages.put(dataMessage);
+            }
         } catch (InterruptedException e) {
             e.printStackTrace();
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
         }
         return buffer.getLong();
     }
@@ -113,13 +128,32 @@ public class SocketSimulator {
     public int receiveInt() {
         ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
         try {
-            byte[] bytes = messages.take().getData();
-            buffer.put(bytes);
-            buffer.flip();
+            while (true) {
+                DataMessage message = messages.take();
+                byte[] bytes = message.getData();
+                if (bytes.length == Integer.BYTES) {
+                    buffer.put(bytes);
+                    buffer.flip();
+                    sendAck(message, message.getHostName(), message.getPort());
+                    break;
+                }
+                messages.put(message);
+            }
         } catch (InterruptedException e) {
             System.err.println("Interrupted");
+        } catch (IOException e) {
+            System.err.println(e.getMessage());
         }
         return buffer.getInt();
+    }
+
+    private void sendAck(Message message, String hostName, int port) throws IOException {
+        AckMessage ackMessage = new AckMessage(message.getId());
+        ackMessage.setTime(message.getTime());
+        ackMessage.setHostName(hostName);
+        ackMessage.setPort(port);
+        byte[] messageBytes = new ObjectMapper().writeValueAsBytes(ackMessage);
+        serverSocket.send(messageBytes);
     }
 
     @Override

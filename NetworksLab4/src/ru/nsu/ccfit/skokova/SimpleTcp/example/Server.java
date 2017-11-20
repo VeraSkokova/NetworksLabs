@@ -111,7 +111,7 @@ class ConnectedClient {
                     synchronized (this) {
                         while (totalRead < fileSize) {
                             read = socket.receive(buffer, totalRead, fileSize - totalRead);
-                            System.out.println("Buffer contains: " + new String(buffer, StandardCharsets.UTF_8));
+                            //System.out.println("Buffer contains: " + new String(buffer, StandardCharsets.UTF_8));
                             outputStream.write(buffer, (int) totalRead, (int) (fileSize - totalRead));
                             outputStream.flush();
                             totalRead += read;

@@ -23,6 +23,14 @@ public class DisconnectMessageCreator extends MessageCreator {
                     if ("id".equals(fieldName)) {
                         Long id = Long.parseLong(jsonParser.getText());
                         disconnectMessage.setId(id);
+                    } else if ("time".equals(fieldName)) {
+                        disconnectMessage.setTime(Long.parseLong(jsonParser.getText()));
+                    } else if ("hostName".equals(fieldName)) {
+                        String hostName = jsonParser.getText();
+                        disconnectMessage.setHostName(hostName);
+                    } else if ("port".equals(fieldName)) {
+                        String port = jsonParser.getText();
+                        disconnectMessage.setPort(Integer.parseInt(port));
                     }
                 }
             }

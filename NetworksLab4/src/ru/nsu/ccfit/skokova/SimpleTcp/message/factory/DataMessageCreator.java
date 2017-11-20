@@ -41,6 +41,8 @@ public class DataMessageCreator extends MessageCreator {
                             long uuid = Long.valueOf(idString);
                             dataMessage.setId(uuid);
                         }
+                    } else if ("time".equals(fieldName)) {
+                        dataMessage.setTime(Long.parseLong(jsonParser.getText()));
                     }
                 }
             }

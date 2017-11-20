@@ -6,7 +6,7 @@ import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
 import java.util.UUID;
 
-@JsonPropertyOrder({"messageType", "data", "id", "nextId"})
+@JsonPropertyOrder({"messageType", "data", "id", "nextId", "time"})
 public class DataMessage extends Message {
     @JsonProperty("dataLength")
     private byte[] data;
@@ -14,6 +14,13 @@ public class DataMessage extends Message {
 
     public DataMessage() {
         this.messageType = MessageType.DATA;
+    }
+
+    @JsonCreator
+    public DataMessage(@JsonProperty("data") byte[] data) {
+        this();
+        this.data = data;
+        this.nextId = -1;
     }
 
     @JsonCreator
