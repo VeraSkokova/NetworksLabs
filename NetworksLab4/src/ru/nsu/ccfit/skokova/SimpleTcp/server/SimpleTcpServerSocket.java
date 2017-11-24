@@ -168,8 +168,10 @@ public class SimpleTcpServerSocket {
                     SocketSimulator tempSocketSimulator = new SocketSimulator(SimpleTcpServerSocket.this, new InetSocketAddress(hostName, port));
                     int receiverIndex = socketSimulators.indexOf(tempSocketSimulator);
                     if (receiverIndex != -1) {
-                        sendAck(message, hostName, port, objectMapper);
-                        socketSimulators.remove(receiverIndex);
+                        if (socketSimulators.get(receiverIndex).isEverythingReceived()) {
+                            sendAck(message, hostName, port, objectMapper);
+                            socketSimulators.remove(receiverIndex);
+                        }
                     }
                 } else if (message.getClass().getSimpleName().equals("AckMessage")) {
                     AckMessage ackMessage = (AckMessage) message;

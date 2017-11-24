@@ -13,8 +13,8 @@ import java.util.UUID;
 public class Client {
     private static final int CODES_COUNT = 4;
     private static final char[] CODES = {'A', 'C', 'G', 'T'};
-    private static final int TIME_TO_PRINT = 10;
-    private static final int SLEEP_TIME = 300;
+    private static final int TIME_TO_PRINT = 1;
+    private static final int SLEEP_TIME = 1500;
     private static String serverName;
     private static int serverPort;
     private final UUID uuid;

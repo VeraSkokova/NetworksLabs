@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 
 public class SimpleTcpClientSocket {
     private static final int BUF_SIZE = 256;
@@ -19,7 +20,7 @@ public class SimpleTcpClientSocket {
     private static final int SLEEP_TIME = 2000;
     private static final int SEND_TIME_DIFF = 3000;
     private DatagramSocket datagramSocket;
-    private ArrayBlockingQueue<Message> inMessages = new ArrayBlockingQueue<>(QUEUE_SIZE);
+    private PriorityBlockingQueue<Message> inMessages = new PriorityBlockingQueue<>(QUEUE_SIZE);
     private ArrayBlockingQueue<Message> outMessages = new ArrayBlockingQueue<>(QUEUE_SIZE);
 
     private String inetAddress;
@@ -63,7 +64,7 @@ public class SimpleTcpClientSocket {
             long connectMessageId = idGenerator.newId();
             message.setId(connectMessageId);
             message.setTime(System.currentTimeMillis());
-            ObjectMapper objectMapper = new ObjectMapper();
+            //ObjectMapper objectMapper = new ObjectMapper();
             /*byte[] messageBytes = objectMapper.writeValueAsBytes(message);
             DatagramPacket datagramPacket = new DatagramPacket(messageBytes, messageBytes.length, new InetSocketAddress(inetAddress, port));*/
             addToSender(message);
@@ -173,6 +174,9 @@ public class SimpleTcpClientSocket {
                     result[startOffset] = b;
                     startOffset++;
                     count++;
+                    if (count == length) {
+                        break;
+                    }
                 }
                 while (dataMessage.getNextId() != LAST_MSG) {
                     Message nextMessage = inMessages.take();
@@ -185,6 +189,9 @@ public class SimpleTcpClientSocket {
                         result[startOffset] = b;
                         startOffset++;
                         count++;
+                        if (count == length) {
+                            break;
+                        }
                     }
                 }
             } else {

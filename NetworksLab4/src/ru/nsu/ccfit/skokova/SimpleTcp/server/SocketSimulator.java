@@ -183,4 +183,8 @@ public class SocketSimulator {
             System.err.println("Interrupted");
         }
     }
+
+    boolean isEverythingReceived() {
+        return messages.isEmpty();
+    }
 }

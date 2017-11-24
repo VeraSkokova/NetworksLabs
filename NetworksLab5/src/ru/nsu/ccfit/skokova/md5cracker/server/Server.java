@@ -61,8 +61,11 @@ public class Server {
                 rangeSize = (int) Math.pow(CODES_COUNT, power);
             }
             int length = i / CODES_COUNT + 1;
+            //System.err.println("length: " + length);
             int start = rangeSize * (i % CODES_COUNT);
+            //System.err.println("start: " + start);
             int end = start + rangeSize - 1;
+            //System.err.println("end: " + end);
             tasks.put(new Task(length, start, end));
         }
     }
@@ -99,7 +102,7 @@ public class Server {
                     long currentTime = System.currentTimeMillis();
                     for (Iterator<String> iterator = timeMap.keySet().iterator(); iterator.hasNext(); ) {
                         String key = iterator.next();
-                        if (timeMap.get(key) - currentTime < MAX_TIME_DIFF) {
+                        if (timeMap.get(key) - currentTime > MAX_TIME_DIFF) {
                             Task task = taskMap.get(key);
                             tasks.put(task);
                             iterator.remove();
