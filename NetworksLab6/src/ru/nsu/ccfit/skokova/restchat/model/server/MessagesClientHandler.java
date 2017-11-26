@@ -33,7 +33,9 @@ public class MessagesClientHandler implements HttpHandler {
             return;
         }
         if (httpExchange.getRequestMethod().equalsIgnoreCase("POST")) {
-            processNewMessage(httpExchange, tempConnectedClient);
+            int clientIndex = server.getConnectedClients().indexOf(tempConnectedClient);
+            ConnectedClient connectedClient = server.getConnectedClients().get(clientIndex);
+            processNewMessage(httpExchange, connectedClient);
         } else if (httpExchange.getRequestMethod().equalsIgnoreCase("GET")) {
             processGetMessages(httpExchange);
         } else {
@@ -65,7 +67,7 @@ public class MessagesClientHandler implements HttpHandler {
             int count = Integer.parseInt(countPart[1]);
             ArrayList<MessageHolder> messageHolders = new ArrayList<>();
             for (int i = offset; i < count; i++) {
-                if (offset >= server.getMessages().size()) {
+                if (i >= server.getMessages().size()) {
                     break;
                 }
                 messageHolders.add(server.getMessages().get(i));

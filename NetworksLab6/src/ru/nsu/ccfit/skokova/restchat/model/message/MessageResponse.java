@@ -14,4 +14,12 @@ public class MessageResponse extends Message {
         this.id = id;
         this.message = message;
     }
+
+    public int getId() {
+        return id;
+    }
+
+    public String getMessage() {
+        return message;
+    }
 }

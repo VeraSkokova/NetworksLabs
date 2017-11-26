@@ -14,4 +14,16 @@ public class UserListResponse extends Message {
     public UserListResponse(@JsonProperty("users") ArrayList<ConnectedClient> connectedClients) {
         this.connectedClients = connectedClients;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 0; i < connectedClients.size(); i++) {
+            stringBuilder.append(i + 1);
+            stringBuilder.append(". ");
+            stringBuilder.append(connectedClients.get(i).getUsername());
+            stringBuilder.append("\n");
+        }
+        return stringBuilder.toString();
+    }
 }

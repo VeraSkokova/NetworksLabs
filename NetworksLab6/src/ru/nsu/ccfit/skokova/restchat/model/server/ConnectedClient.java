@@ -1,5 +1,6 @@
 package ru.nsu.ccfit.skokova.restchat.model.server;
 
+import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
 import org.codehaus.jackson.annotate.JsonProperty;
 
@@ -14,6 +15,13 @@ public class ConnectedClient {
     private String username;
     @JsonProperty("online")
     private boolean online;
+
+    @JsonCreator
+    public ConnectedClient(@JsonProperty("id") int id, @JsonProperty("username") String username, @JsonProperty("online") boolean online) {
+        this.id = id;
+        this.username = username;
+        this.online = online;
+    }
 
     public ConnectedClient(int id, UUID token, String username, boolean online) {
         this.id = id;

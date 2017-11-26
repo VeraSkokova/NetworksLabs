@@ -22,4 +22,12 @@ public class LoginResponse extends Message {
         this.online = online;
         this.token = token;
     }
+
+    public int getId() {
+        return id;
+    }
+
+    public UUID getToken() {
+        return token;
+    }
 }

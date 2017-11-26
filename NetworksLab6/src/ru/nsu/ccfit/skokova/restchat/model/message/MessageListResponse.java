@@ -13,4 +13,8 @@ public class MessageListResponse extends Message {
     public MessageListResponse(@JsonProperty("messages") ArrayList<MessageHolder> messages) {
         this.messages = messages;
     }
+
+    public ArrayList<MessageHolder> getMessages() {
+        return messages;
+    }
 }

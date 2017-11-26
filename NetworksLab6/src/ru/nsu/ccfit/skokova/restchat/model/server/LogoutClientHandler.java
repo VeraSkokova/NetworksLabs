@@ -26,6 +26,10 @@ public class LogoutClientHandler implements HttpHandler {
             ConnectedClient tempConnectedClient = new ConnectedClient(uuid);
             if (server.getConnectedClients().contains(tempConnectedClient)) {
                 sendLogoutSuccess(httpExchange);
+                int clientIndex = server.getConnectedClients().indexOf(tempConnectedClient);
+                ConnectedClient connectedClient = server.getConnectedClients().get(clientIndex);
+                server.getUsernames().remove(connectedClient.getUsername());
+                server.getConnectedClients().remove(connectedClient);
             } else {
                 sendLogoutError(httpExchange);
             }
@@ -35,7 +39,7 @@ public class LogoutClientHandler implements HttpHandler {
     }
 
     private void sendLogoutSuccess(HttpExchange httpExchange) throws IOException {
-        LogoutResponse logoutResponse = new LogoutResponse();
+        LogoutResponse logoutResponse = new LogoutResponse("bye");
         ObjectMapper objectMapper = new ObjectMapper();
         String logoutResponseString = objectMapper.writeValueAsString(logoutResponse);
         DataOutputStream dataOutputStream = new DataOutputStream(httpExchange.getResponseBody());
