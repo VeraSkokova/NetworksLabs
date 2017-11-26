@@ -27,11 +27,7 @@ public class LoginClientHandler implements HttpHandler {
     public void handle(HttpExchange httpExchange) throws IOException {
         System.out.println("Hi!");
         String requestMethod = httpExchange.getRequestMethod();
-        System.out.println(requestMethod);
         Headers headers = httpExchange.getRequestHeaders();
-        for (String s : headers.keySet()) {
-            System.out.println(s + " : " + headers.get(s));
-        }
         InputStream inputStream = httpExchange.getRequestBody();
         if (requestMethod.equalsIgnoreCase("POST")) {
             processLogin(headers, inputStream, httpExchange);
@@ -46,7 +42,11 @@ public class LoginClientHandler implements HttpHandler {
                 if (!server.getUsernames().contains(username)) {
                     logger.debug("New user: " + username);
                     server.getUsernames().add(username);
-                    sendLoginSuccess(username, httpExchange);
+                    ConnectedClient connectedClient = new ConnectedClient(server.getNewId(), UUID.randomUUID(), username, true);
+                    server.getConnectedClients().add(connectedClient);
+                    sendLoginSuccess(connectedClient, httpExchange);
+                } else {
+                    sendLoginError(httpExchange);
                 }
             } else {
                 System.err.println("Problem!!!");
@@ -57,8 +57,8 @@ public class LoginClientHandler implements HttpHandler {
         }
     }
 
-    private void sendLoginSuccess(String username, HttpExchange httpExchange) throws IOException {
-        LoginResponse loginResponse = new LoginResponse(server.getNewId(), username, true, UUID.randomUUID());
+    private void sendLoginSuccess(ConnectedClient connectedClient, HttpExchange httpExchange) throws IOException {
+        LoginResponse loginResponse = new LoginResponse(connectedClient.getId(), connectedClient.getUsername(), true, connectedClient.getToken());
         DataOutputStream dataOutputStream = new DataOutputStream(httpExchange.getResponseBody());
         String responseString = objectMapper.writeValueAsString(loginResponse);
 
@@ -69,5 +69,11 @@ public class LoginClientHandler implements HttpHandler {
         dataOutputStream.writeBytes(responseString);
         dataOutputStream.flush();
         dataOutputStream.close();
+    }
+
+    private void sendLoginError(HttpExchange httpExchange) throws IOException {
+        Headers responseHeaders = httpExchange.getResponseHeaders();
+        responseHeaders.set("WWW-Authenticate", "Token realm=’Username is already in use");
+        httpExchange.sendResponseHeaders(401, -1);
     }
 }
