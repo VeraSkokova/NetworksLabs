@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.UserResponse;
+import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -22,6 +23,9 @@ public class UserClientHandler implements HttpHandler {
     public void handle(HttpExchange httpExchange) throws IOException {
         try {
             System.out.println("User");
+            if (!checkRequest(httpExchange)) {
+                return;
+            }
             Headers headers = httpExchange.getRequestHeaders();
             UUID uuid = UUID.fromString(headers.get("Authorization").get(0));
             ConnectedClient tempConnectedClient = new ConnectedClient(uuid);
@@ -33,13 +37,13 @@ public class UserClientHandler implements HttpHandler {
                 if (connectedClient != null) {
                     sendUserSuccess(httpExchange, connectedClient);
                 } else {
-                    sendUserError(httpExchange, 404);
+                    sendUserError(httpExchange, ResponseCodes.NOT_FOUND);
                 }
             } else {
-                sendUserError(httpExchange, 403);
+                sendUserError(httpExchange, ResponseCodes.FORBIDDEN);
             }
         } catch (IllegalArgumentException e) {
-            sendUserError( httpExchange, 403);
+            sendUserError( httpExchange, ResponseCodes.FORBIDDEN);
         }
     }
 
@@ -52,7 +56,7 @@ public class UserClientHandler implements HttpHandler {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("Content-type", "application/json");
 
-        httpExchange.sendResponseHeaders(200, userResponseString.getBytes().length);
+        httpExchange.sendResponseHeaders(ResponseCodes.OK, userResponseString.getBytes().length);
         dataOutputStream.writeBytes(userResponseString);
         dataOutputStream.flush();
         dataOutputStream.close();
@@ -60,5 +64,17 @@ public class UserClientHandler implements HttpHandler {
 
     private void sendUserError(HttpExchange httpExchange, int code) throws IOException {
         httpExchange.sendResponseHeaders(code, -1);
+    }
+
+    private boolean checkRequest(HttpExchange httpExchange) throws IOException {
+        if (!httpExchange.getRequestMethod().equalsIgnoreCase("GET")) {
+            sendUserError(httpExchange, ResponseCodes.METHOD_NOT_ALLOWED);
+            return false;
+        }
+        if (!httpExchange.getRequestHeaders().containsKey("Authorization")) {
+            sendUserError(httpExchange, ResponseCodes.BAD_REQUEST);
+            return false;
+        }
+        return true;
     }
 }

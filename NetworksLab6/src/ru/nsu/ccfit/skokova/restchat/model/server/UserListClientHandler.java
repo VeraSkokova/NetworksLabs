@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.UserListResponse;
+import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -21,16 +22,19 @@ public class UserListClientHandler implements HttpHandler {
     public void handle(HttpExchange httpExchange) throws IOException {
         try {
             System.out.println("UserList");
+            if (!checkRequest(httpExchange)) {
+                return;
+            }
             Headers headers = httpExchange.getRequestHeaders();
             UUID uuid = UUID.fromString(headers.get("Authorization").get(0));
             ConnectedClient tempConnectedClient = new ConnectedClient(uuid);
             if (server.getConnectedClients().contains(tempConnectedClient)) {
                 sendUsersSuccess(httpExchange);
             } else {
-                sendUsersError(httpExchange);
+                sendUsersError(httpExchange, ResponseCodes.FORBIDDEN);
             }
         } catch (IllegalArgumentException e) {
-            sendUsersError(httpExchange);
+            sendUsersError(httpExchange, ResponseCodes.FORBIDDEN);
         }
     }
 
@@ -43,15 +47,27 @@ public class UserListClientHandler implements HttpHandler {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("Content-type", "application/json");
 
-        httpExchange.sendResponseHeaders(200, userListResponseString.getBytes().length);
+        httpExchange.sendResponseHeaders(ResponseCodes.OK, userListResponseString.getBytes().length);
         dataOutputStream.writeBytes(userListResponseString);
         dataOutputStream.flush();
         dataOutputStream.close();
     }
 
-    private void sendUsersError(HttpExchange httpExchange) throws IOException {
+    private void sendUsersError(HttpExchange httpExchange, int code) throws IOException {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("WWW-Authenticate", "Token realm=’Bad token");
-        httpExchange.sendResponseHeaders(403, -1);
+        httpExchange.sendResponseHeaders(ResponseCodes.FORBIDDEN, -1);
+    }
+
+    private boolean checkRequest(HttpExchange httpExchange) throws IOException {
+        if (!httpExchange.getRequestMethod().equalsIgnoreCase("GET")) {
+            sendUsersError(httpExchange, ResponseCodes.METHOD_NOT_ALLOWED);
+            return false;
+        }
+        if (!httpExchange.getRequestHeaders().containsKey("Authorization")) {
+            sendUsersError(httpExchange, ResponseCodes.FORBIDDEN);
+            return false;
+        }
+        return true;
     }
 }

@@ -89,6 +89,7 @@ public class Client {
             try {
                 URL url = new URL("http", server, port, "/messages");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                System.out.println("Sending " + message);
 
                 connection.setRequestMethod("POST");
                 connection.setRequestProperty("Authorization", myToken.toString());
@@ -107,13 +108,17 @@ public class Client {
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode == ResponseCodes.OK) {
+                    System.out.println(message + " delivered successfully");
                     MessageResponse messageResponse = objectMapper.readValue(connection.getInputStream(), MessageResponse.class);
                     if ((messageResponse.getId() - currentMessageId) > 1) {
                         applyForMessages();
+                        System.out.println("Need some more messages");
                     } else {
                         handleChange(username + " : " + messageResponse.getMessage());
+                        System.out.println("Printing");
                     }
                     currentMessageId = messageResponse.getId();
+                    System.out.println("Increased currentMessageId to " + currentMessageId);
                 }
             } catch (IOException e) {
                 System.err.println(e.getMessage());
@@ -127,6 +132,7 @@ public class Client {
             int offset = currentMessageId + 1;
             do {
                 URL url = new URL("http", server, port, "/messages?offset=" + offset + "&count=" + MESSAGES_COUNT);
+                //System.out.println("Asking for " + MESSAGES_COUNT + " messages from " + offset);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
                 connection.setRequestMethod("GET");
@@ -140,6 +146,7 @@ public class Client {
                 if (responseCode == ResponseCodes.OK) {
                     ObjectMapper objectMapper = new ObjectMapper();
                     messageListResponse = objectMapper.readValue(connection.getInputStream(), MessageListResponse.class);
+                    //System.out.println("Got " + messageListResponse.getMessages().size() + " new messages");
                 } else {
                     break;
                 }
@@ -150,6 +157,7 @@ public class Client {
                     }
                     handleChange(users.get(messageHolder.getAuthor()) + " : " + messageHolder.getMessage());
                     currentMessageId = messageListResponse.getMessages().get(messageListResponse.getMessages().size() - 1).getId();
+                    //System.out.println("Increased currentMessageId to " + currentMessageId);
                 }
                 offset += MESSAGES_COUNT;
             } while (!messageListResponse.getMessages().isEmpty());
@@ -282,7 +290,7 @@ public class Client {
                 while (true) {
                     synchronized (lock) {
                         applyForMessages();
-                        System.out.println("Gonna get new messages " + i);
+                        //System.out.println("Gonna get new messages " + i);
                     }
                     i++;
                     Thread.sleep(SLEEP_TIME);

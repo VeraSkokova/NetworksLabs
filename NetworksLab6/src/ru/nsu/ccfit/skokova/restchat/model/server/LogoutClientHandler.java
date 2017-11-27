@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.LogoutResponse;
+import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -21,6 +22,9 @@ public class LogoutClientHandler implements HttpHandler {
     public void handle(HttpExchange httpExchange) throws IOException {
         try {
             System.out.println("Logout");
+            if (!checkRequest(httpExchange)) {
+                return;
+            }
             Headers headers = httpExchange.getRequestHeaders();
             UUID uuid = UUID.fromString(headers.get("Authorization").get(0));
             ConnectedClient tempConnectedClient = new ConnectedClient(uuid);
@@ -31,10 +35,10 @@ public class LogoutClientHandler implements HttpHandler {
                 server.getUsernames().remove(connectedClient.getUsername());
                 server.getConnectedClients().remove(connectedClient);
             } else {
-                sendLogoutError(httpExchange);
+                sendLogoutError(httpExchange, ResponseCodes.FORBIDDEN);
             }
         } catch (IllegalArgumentException e) {
-            sendLogoutError(httpExchange);
+            sendLogoutError(httpExchange, ResponseCodes.FORBIDDEN);
         }
     }
 
@@ -47,15 +51,27 @@ public class LogoutClientHandler implements HttpHandler {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("Content-type", "application/json");
 
-        httpExchange.sendResponseHeaders(200, logoutResponseString.getBytes().length);
+        httpExchange.sendResponseHeaders(ResponseCodes.OK, logoutResponseString.getBytes().length);
         dataOutputStream.writeBytes(logoutResponseString);
         dataOutputStream.flush();
         dataOutputStream.close();
     }
 
-    private void sendLogoutError(HttpExchange httpExchange) throws IOException {
+    private void sendLogoutError(HttpExchange httpExchange, int code) throws IOException {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("WWW-Authenticate", "Token realm=’Bad token");
-        httpExchange.sendResponseHeaders(403, -1);
+        httpExchange.sendResponseHeaders(code, -1);
+    }
+
+    private boolean checkRequest(HttpExchange httpExchange) throws IOException {
+        if (!httpExchange.getRequestMethod().equalsIgnoreCase("GET")) {
+            sendLogoutError(httpExchange, ResponseCodes.METHOD_NOT_ALLOWED);
+            return false;
+        }
+        if (!httpExchange.getRequestHeaders().containsKey("Authorization")) {
+            sendLogoutError(httpExchange, ResponseCodes.BAD_REQUEST);
+            return false;
+        }
+        return true;
     }
 }

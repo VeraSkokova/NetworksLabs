@@ -3,11 +3,13 @@ package ru.nsu.ccfit.skokova.restchat.model.server;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import com.sun.org.apache.regexp.internal.RE;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.LoginRequest;
 import ru.nsu.ccfit.skokova.restchat.model.message.LoginResponse;
+import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -31,6 +33,8 @@ public class LoginClientHandler implements HttpHandler {
         InputStream inputStream = httpExchange.getRequestBody();
         if (requestMethod.equalsIgnoreCase("POST")) {
             processLogin(headers, inputStream, httpExchange);
+        } else {
+            sendLoginError(httpExchange, ResponseCodes.METHOD_NOT_ALLOWED);
         }
     }
 
@@ -46,10 +50,10 @@ public class LoginClientHandler implements HttpHandler {
                     server.getConnectedClients().add(connectedClient);
                     sendLoginSuccess(connectedClient, httpExchange);
                 } else {
-                    sendLoginError(httpExchange);
+                    sendLoginError(httpExchange, ResponseCodes.UNAUTHORIZED);
                 }
             } else {
-                System.err.println("Problem!!!");
+                sendLoginError(httpExchange, ResponseCodes.BAD_REQUEST);
             }
         } catch (IOException e) {
             //logger.error(e.getMessage());
@@ -65,15 +69,17 @@ public class LoginClientHandler implements HttpHandler {
         Headers responseHeaders = httpExchange.getResponseHeaders();
         responseHeaders.set("Content-type", "application/json");
 
-        httpExchange.sendResponseHeaders(200, responseString.getBytes().length);
+        httpExchange.sendResponseHeaders(ResponseCodes.OK, responseString.getBytes().length);
         dataOutputStream.writeBytes(responseString);
         dataOutputStream.flush();
         dataOutputStream.close();
     }
 
-    private void sendLoginError(HttpExchange httpExchange) throws IOException {
+    private void sendLoginError(HttpExchange httpExchange, int code) throws IOException {
         Headers responseHeaders = httpExchange.getResponseHeaders();
-        responseHeaders.set("WWW-Authenticate", "Token realm=’Username is already in use");
-        httpExchange.sendResponseHeaders(401, -1);
+        if (code == ResponseCodes.UNAUTHORIZED) {
+            responseHeaders.set("WWW-Authenticate", "Token realm=’Username is already in use");
+        }
+        httpExchange.sendResponseHeaders(code, -1);
     }
 }
