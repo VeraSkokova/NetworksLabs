@@ -42,12 +42,12 @@ public class MessagesClientHandler implements HttpHandler {
             sendMessageError(httpExchange, ResponseCodes.FORBIDDEN);
             return;
         }
+        int clientIndex = server.getConnectedClients().indexOf(tempConnectedClient);
+        ConnectedClient connectedClient = server.getConnectedClients().get(clientIndex);
         if (httpExchange.getRequestMethod().equalsIgnoreCase("POST")) {
-            int clientIndex = server.getConnectedClients().indexOf(tempConnectedClient);
-            ConnectedClient connectedClient = server.getConnectedClients().get(clientIndex);
             processNewMessage(httpExchange, connectedClient);
         } else if (httpExchange.getRequestMethod().equalsIgnoreCase("GET")) {
-            processGetMessages(httpExchange);
+            processGetMessages(httpExchange, connectedClient);
         } else {
             sendMessageError(httpExchange, ResponseCodes.BAD_REQUEST);
         }
@@ -67,10 +67,11 @@ public class MessagesClientHandler implements HttpHandler {
             //System.out.println("Message id is " + messageHolder.getId());
 
             sendMessageResponse(httpExchange, messageHolder, connectedClient);
+            server.updateClientLastConnected(connectedClient);
         }
     }
 
-    private void processGetMessages(HttpExchange httpExchange) throws IOException {
+    private void processGetMessages(HttpExchange httpExchange, ConnectedClient connectedClient) throws IOException {
         String query = httpExchange.getRequestURI().getQuery();
         String[] queryParts = query.split("&");
         if (queryParts.length == 2) {
@@ -88,6 +89,7 @@ public class MessagesClientHandler implements HttpHandler {
                 //System.out.println("Add " + i + " message to response body");
             }
             sendMessageListResponse(httpExchange, messageHolders);
+            server.updateClientLastConnected(connectedClient);
         }
 
     }

@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.LogoutResponse;
+import ru.nsu.ccfit.skokova.restchat.model.message.MessageHolder;
 import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
@@ -34,6 +35,9 @@ public class LogoutClientHandler implements HttpHandler {
                 ConnectedClient connectedClient = server.getConnectedClients().get(clientIndex);
                 server.getUsernames().remove(connectedClient.getUsername());
                 server.getConnectedClients().remove(connectedClient);
+                MessageHolder messageHolder = new MessageHolder("logged out", connectedClient.getId());
+                server.getMessages().add(messageHolder);
+                messageHolder.setId(server.getMessages().indexOf(messageHolder));
             } else {
                 sendLogoutError(httpExchange, ResponseCodes.FORBIDDEN);
             }

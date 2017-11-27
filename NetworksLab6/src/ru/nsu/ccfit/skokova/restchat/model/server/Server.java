@@ -8,24 +8,31 @@ import ru.nsu.ccfit.skokova.restchat.model.message.MessageHolder;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Server {
     public static final int MIN_PORT_NUMBER = 0;
     public static final int MAX_PORT_NUMBER = 65535;
+    private static final int SLEEP_TIME = 3000;
+    private static final int IS_OVER = 5000;
+
     private static final Logger logger = LogManager.getLogger(Server.class);
+
     private static final int PORT = 2359;
     private static final String ADDRESS = "localhost";
+
     private static final String LOGIN_PATH = "/login";
     private static final String USERLIST_PATH = "/users";
     private static final String LOGOUT_PATH = "/logout";
     private static final String USER_PATH = "/users/";
     private static final String MESSAGES_PATH = "/messages";
+
     private static final AtomicInteger ID = new AtomicInteger();
     private ArrayList<String> usernames = new ArrayList<>();
     private ArrayList<ConnectedClient> connectedClients = new ArrayList<>();
+    private Map<ConnectedClient, Long> clientsLastConneced = Collections.synchronizedMap(new HashMap<>());
     private CopyOnWriteArrayList<MessageHolder> messages = new CopyOnWriteArrayList<>();
 
     public static void main(String[] args) {
@@ -46,6 +53,9 @@ public class Server {
         HttpContext userHttpContext = httpServer.createContext(USER_PATH, new UserClientHandler(this));
         HttpContext messageHttpContext = httpServer.createContext(MESSAGES_PATH, new MessagesClientHandler(this));
         httpServer.start();
+
+        Thread timeChecker = new Thread(new TimeCheckerRunnable());
+        timeChecker.start();
     }
 
     public ArrayList<String> getUsernames() {
@@ -71,5 +81,47 @@ public class Server {
             }
         }
         return null;
+    }
+
+    public ConnectedClient searchClient(String username) {
+        for (ConnectedClient connectedClient : connectedClients) {
+            if (connectedClient.getUsername().equals(username)) {
+                return connectedClient;
+            }
+        }
+        return null;
+    }
+
+    public void updateClientLastConnected(ConnectedClient connectedClient) {
+        clientsLastConneced.put(connectedClient, System.currentTimeMillis());
+        int index = connectedClients.indexOf(connectedClient);
+        if (!connectedClients.get(index).isOnline()) {
+            connectedClients.get(index).setOnline(true);
+        }
+    }
+
+    class TimeCheckerRunnable implements Runnable {
+        @Override
+        public void run() {
+            while (!Thread.interrupted()) {
+                try {
+                    Thread.sleep(SLEEP_TIME);
+                    long now = System.currentTimeMillis();
+                    for (Iterator<ConnectedClient> iterator = clientsLastConneced.keySet().iterator(); iterator.hasNext(); ) {
+                        ConnectedClient connectedClient = iterator.next();
+                        if (now - clientsLastConneced.get(connectedClient) > IS_OVER) {
+                            clientsLastConneced.remove(connectedClient);
+                            int index = connectedClients.indexOf(connectedClient);
+                            if (index != -1) {
+                                connectedClients.get(index).setOnline(false);
+                            }
+                            System.out.println(connectedClient.getUsername() + " timed out");
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    System.err.println("Interrupted");
+                }
+            }
+        }
     }
 }

@@ -36,6 +36,7 @@ public class UserClientHandler implements HttpHandler {
                 ConnectedClient connectedClient = server.searchClient(clientNumber);
                 if (connectedClient != null) {
                     sendUserSuccess(httpExchange, connectedClient);
+                    server.updateClientLastConnected(connectedClient);
                 } else {
                     sendUserError(httpExchange, ResponseCodes.NOT_FOUND);
                 }

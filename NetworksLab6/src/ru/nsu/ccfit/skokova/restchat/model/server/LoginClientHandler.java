@@ -9,6 +9,7 @@ import org.apache.log4j.Logger;
 import org.codehaus.jackson.map.ObjectMapper;
 import ru.nsu.ccfit.skokova.restchat.model.message.LoginRequest;
 import ru.nsu.ccfit.skokova.restchat.model.message.LoginResponse;
+import ru.nsu.ccfit.skokova.restchat.model.message.MessageHolder;
 import ru.nsu.ccfit.skokova.restchat.model.utils.ResponseCodes;
 
 import java.io.DataOutputStream;
@@ -48,7 +49,11 @@ public class LoginClientHandler implements HttpHandler {
                     server.getUsernames().add(username);
                     ConnectedClient connectedClient = new ConnectedClient(server.getNewId(), UUID.randomUUID(), username, true);
                     server.getConnectedClients().add(connectedClient);
+                    server.updateClientLastConnected(connectedClient);
                     sendLoginSuccess(connectedClient, httpExchange);
+                    MessageHolder messageHolder = new MessageHolder("logged in", connectedClient.getId());
+                    server.getMessages().add(messageHolder);
+                    messageHolder.setId(server.getMessages().indexOf(messageHolder));
                 } else {
                     sendLoginError(httpExchange, ResponseCodes.UNAUTHORIZED);
                 }

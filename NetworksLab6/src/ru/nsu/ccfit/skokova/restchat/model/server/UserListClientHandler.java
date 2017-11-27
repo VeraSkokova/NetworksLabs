@@ -30,6 +30,7 @@ public class UserListClientHandler implements HttpHandler {
             ConnectedClient tempConnectedClient = new ConnectedClient(uuid);
             if (server.getConnectedClients().contains(tempConnectedClient)) {
                 sendUsersSuccess(httpExchange);
+                server.updateClientLastConnected(tempConnectedClient);
             } else {
                 sendUsersError(httpExchange, ResponseCodes.FORBIDDEN);
             }

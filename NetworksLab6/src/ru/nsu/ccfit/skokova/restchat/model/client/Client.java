@@ -74,6 +74,9 @@ public class Client {
                 myId = loginResponse.getId();
                 myToken = loginResponse.getToken();
                 users.put(myId, username);
+                synchronized (lock) {
+                    applyForMessages();
+                }
                 Thread messageApplier = new Thread(new MessageApplier());
                 messageApplier.start();
             } else {
@@ -89,7 +92,7 @@ public class Client {
             try {
                 URL url = new URL("http", server, port, "/messages");
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                System.out.println("Sending " + message);
+                //System.out.println("Sending " + message);
 
                 connection.setRequestMethod("POST");
                 connection.setRequestProperty("Authorization", myToken.toString());
@@ -108,17 +111,17 @@ public class Client {
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode == ResponseCodes.OK) {
-                    System.out.println(message + " delivered successfully");
+                    //System.out.println(message + " delivered successfully");
                     MessageResponse messageResponse = objectMapper.readValue(connection.getInputStream(), MessageResponse.class);
                     if ((messageResponse.getId() - currentMessageId) > 1) {
                         applyForMessages();
-                        System.out.println("Need some more messages");
+                        //System.out.println("Need some more messages");
                     } else {
                         handleChange(username + " : " + messageResponse.getMessage());
                         System.out.println("Printing");
                     }
                     currentMessageId = messageResponse.getId();
-                    System.out.println("Increased currentMessageId to " + currentMessageId);
+                    //System.out.println("Increased currentMessageId to " + currentMessageId);
                 }
             } catch (IOException e) {
                 System.err.println(e.getMessage());

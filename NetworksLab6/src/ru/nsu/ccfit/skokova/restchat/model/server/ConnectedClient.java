@@ -54,6 +54,10 @@ public class ConnectedClient {
         this.id = id;
     }
 
+    public void setOnline(boolean online) {
+        this.online = online;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
