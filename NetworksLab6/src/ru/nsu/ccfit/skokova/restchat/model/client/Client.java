@@ -118,7 +118,7 @@ public class Client {
                         //System.out.println("Need some more messages");
                     } else {
                         handleChange(username + " : " + messageResponse.getMessage());
-                        System.out.println("Printing");
+                        //System.out.println("Printing");
                     }
                     currentMessageId = messageResponse.getId();
                     //System.out.println("Increased currentMessageId to " + currentMessageId);
