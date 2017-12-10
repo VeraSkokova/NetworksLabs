@@ -5,10 +5,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -113,18 +110,34 @@ public class PortForwarder {
     }
 
     private void processInput(SelectionKey selectionKey) throws IOException {
-        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
-        System.out.println("New input from local " + socketChannel.getLocalAddress() + " remote " + socketChannel.getRemoteAddress());
-        ByteBuffer buffer = bytesToSend.get(socketChannel);
-        socketChannel.read(buffer);
-        SocketChannel anotherSocketChannel = connectionMap.get(socketChannel);
-        buffer.flip();
-        anotherSocketChannel.write(buffer);
-        if (buffer.hasRemaining()) {
-            socketChannel.register(selector, SelectionKey.OP_WRITE);
+        try {
+            SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+            System.out.println("New input from local " + socketChannel.getLocalAddress() + " remote " + socketChannel.getRemoteAddress());
+            ByteBuffer buffer = bytesToSend.get(socketChannel);
+            int read = socketChannel.read(buffer);
+            SocketChannel anotherSocketChannel = connectionMap.get(socketChannel);
+            buffer.flip();
+            anotherSocketChannel.write(buffer);
+            if (buffer.hasRemaining()) {
+                socketChannel.register(selector, SelectionKey.OP_WRITE);
+            }
+            buffer.flip();
+            System.out.println("Wrote data from input");
+            if (read == -1) {
+                socketChannel.shutdownOutput();
+                System.out.println("Shutdown input");
+
+            }
+        } catch (ClosedChannelException e) {
+            SocketChannel first = (SocketChannel) selectionKey.channel();
+            SocketChannel second = (SocketChannel) selectionKey.channel();
+            first.close();
+            second.close();
+            connectionMap.remove(first);
+            connectionMap.remove(second);
+            bytesToSend.remove(first);
+            bytesToSend.remove(second);
         }
-        buffer.flip();
-        System.out.println("Wrote data from input");
     }
 
     private void processOutput(SelectionKey selectionKey) throws IOException {
