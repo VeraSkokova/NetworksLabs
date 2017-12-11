@@ -80,24 +80,23 @@ public class PortForwarder {
             processInput(selectionKey);
         } else if (selectionKey.isWritable()) {
             processOutput(selectionKey);
-        }/* else if (selectionKey.isConnectable()) {
+        } else if (selectionKey.isConnectable()) {
             processConnect(selectionKey);
-        }*/
+        }
     }
 
     private void registerClient() throws IOException {
         try {
             SocketChannel clientSocketChannel = serverSocketChannel.accept();
+            clientSocketChannel.configureBlocking(false);
             System.out.println("New connection from local " + clientSocketChannel.getLocalAddress() + " remote " + clientSocketChannel.getRemoteAddress());
 
             SocketChannel connectionSocketChannel = SocketChannel.open();
-            connectionSocketChannel.connect(inetSocketAddress);
-
             connectionSocketChannel.configureBlocking(false);
-            clientSocketChannel.configureBlocking(false);
-
-            clientSocketChannel.register(selector, SelectionKey.OP_READ);
-            connectionSocketChannel.register(selector, SelectionKey.OP_READ);
+            boolean isConnected = connectionSocketChannel.connect(inetSocketAddress);
+            if (!isConnected) {
+                connectionSocketChannel.register(selector, SelectionKey.OP_CONNECT);
+            }
 
             connectionMap.put(clientSocketChannel, connectionSocketChannel);
             connectionMap.put(connectionSocketChannel, clientSocketChannel);
@@ -156,11 +155,18 @@ public class PortForwarder {
 
     private void processConnect(SelectionKey selectionKey) throws IOException {
         SocketChannel connectionSocketChannel = (SocketChannel) selectionKey.channel();
-        connectionSocketChannel.configureBlocking(false);
-        System.out.println("New connection response from remote " + connectionSocketChannel.getRemoteAddress());
-        connectionSocketChannel.register(selector, SelectionKey.OP_READ);
+        boolean isConnected = connectionSocketChannel.finishConnect();
+        if (!isConnected) {
+            System.out.println("Haven't connected yet");
+            connectionSocketChannel.register(selector, SelectionKey.OP_CONNECT);
+            return;
+        }
+
+        System.out.println("New output from remote " + connectionSocketChannel.getRemoteAddress());
         SocketChannel clientSocketChannel = connectionMap.get(connectionSocketChannel);
-        clientSocketChannel.configureBlocking(false);
+
         clientSocketChannel.register(selector, SelectionKey.OP_READ);
+        connectionSocketChannel.register(selector, SelectionKey.OP_READ);
+
     }
 }
