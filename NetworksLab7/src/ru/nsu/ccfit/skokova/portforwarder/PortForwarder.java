@@ -19,7 +19,6 @@ public class PortForwarder {
 
     private Map<SocketChannel, SocketChannel> connectionMap = new HashMap<>();
     private Map<SocketChannel, ByteBuffer> bytesToSend = new HashMap<>();
-    private Map<SocketChannel, ConnectionInfo> connectionInfoMap = new HashMap<>();
 
     public PortForwarder(int lPort, int rPort, String rHost) {
         this.lPort = lPort;
@@ -108,9 +107,6 @@ public class PortForwarder {
 
             bytesToSend.put(clientSocketChannel, ByteBuffer.allocate(BUF_SIZE));
             bytesToSend.put(connectionSocketChannel, ByteBuffer.allocate(BUF_SIZE));
-
-            connectionInfoMap.put(clientSocketChannel, new ConnectionInfo());
-            connectionInfoMap.put(connectionSocketChannel, new ConnectionInfo());
         } catch (NullPointerException e) {
             //System.out.println("null caught");
         }
@@ -129,47 +125,39 @@ public class PortForwarder {
 
             if (read == -1) {
                 System.out.println("Can't read no more (in processInput remote: " + socketChannel.getRemoteAddress() + ")");
-                if (buffer.hasRemaining()) {
-                    anotherSocketChannel.write(buffer);
+                pauseOption(selectionKey, SelectionKey.OP_READ);
+                if (buffer.position() != 0) {
+                    System.out.println("Something else " + buffer.position());
+                    //buffer.flip();
+                    for (SelectionKey key : keys) {
+                        if (key.channel().equals(anotherSocketChannel)) {
+                            resumeOption(key, SelectionKey.OP_WRITE);
+                        }
+                    }
+                } else {
+                    anotherSocketChannel.shutdownOutput();
+                    System.out.println("Shutdown output");
                 }
 
-                socketChannel.shutdownInput();
-                pauseOption(selectionKey, SelectionKey.OP_READ);
-                anotherSocketChannel.shutdownOutput();
-                selector.wakeup();
-                connectionInfoMap.get(socketChannel).setClosed(true);
-                System.out.println("Shutdown input");
-                if (connectionInfoMap.get(anotherSocketChannel).isClosed()) {
-                    deleteChannels(socketChannel, anotherSocketChannel);
-                    closeChannels(socketChannel, anotherSocketChannel);
+                if ((bytesToSend.get(socketChannel).position() == 0) && (bytesToSend.get(anotherSocketChannel).position() == 0)) {
+                    throw new ClosedChannelException();
                 }
                 return;
             }
 
-            buffer.flip();
-            int write = anotherSocketChannel.write(buffer);
-            System.out.println("Write " + write + " bytes to " + anotherSocketChannel.getRemoteAddress());
-            if (buffer.hasRemaining()) {
-                resumeOption(selectionKey, SelectionKey.OP_WRITE);
-                for (SelectionKey key : keys) {
-                    if (key.channel().equals(anotherSocketChannel)) {
-                        resumeOption(key, SelectionKey.OP_READ);
-                    }
+            //buffer.flip();
+            for (SelectionKey key : keys) {
+                if (key.channel().equals(anotherSocketChannel)) {
+                    resumeOption(key, SelectionKey.OP_WRITE);
                 }
             }
-
-            buffer.compact();
-            if (!buffer.hasRemaining()) {
-                System.out.println("Buffer is full (in processInput)");
-                for (SelectionKey key : keys) {
-                    if (key.channel().equals(anotherSocketChannel)) {
-                        pauseOption(key, SelectionKey.OP_READ);
-                    }
-                }
-            }
-            //System.out.println("Wrote data from input");
+            pauseOption(selectionKey, SelectionKey.OP_READ);
         } catch (ClosedChannelException e) {
-            System.out.println("Another channel is closed");
+            System.out.println("Closing");
+            SocketChannel first = (SocketChannel) selectionKey.channel();
+            SocketChannel second = connectionMap.get(first);
+            closeChannels(first, second);
+            deleteChannels(first, second);
         }
     }
 
@@ -195,9 +183,10 @@ public class PortForwarder {
                     resumeOption(key, SelectionKey.OP_READ);
                 }
             }
-            System.out.println("Wrote data from output");
+            //System.out.println("Wrote data from output");
         } catch (ClosedChannelException e) {
             System.out.println("Another channel closed");
+            System.exit(1);
         }
     }
 
@@ -225,8 +214,6 @@ public class PortForwarder {
         connectionMap.remove(second);
         bytesToSend.remove(first);
         bytesToSend.remove(second);
-        connectionInfoMap.remove(first);
-        connectionInfoMap.remove(second);
     }
 
     private void closeChannels(SocketChannel first, SocketChannel second) {
@@ -249,17 +236,5 @@ public class PortForwarder {
 
     private void resumeOption(SelectionKey selectionKey, int option) {
         selectionKey.interestOps(selectionKey.interestOps() | option);
-    }
-}
-
-class ConnectionInfo {
-    private boolean isClosed;
-
-    boolean isClosed() {
-        return isClosed;
-    }
-
-    void setClosed(boolean closed) {
-        isClosed = closed;
     }
 }
