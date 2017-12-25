@@ -26,19 +26,19 @@ public class RequestHandler {
 
         if (connectionWrapper.isFrom()) {
             switch (connectionWrapper.getConnection().getState()) {
-                case READ_HEADER: //key.isReadable()
+                case READ_HEADER:
                     if (selectionKey.isReadable()) {
-                        processHeaders(connectionWrapper.getConnection(), socketChannel);
+                        processHeaders(connectionWrapper.getConnection(), socketChannel, selectionKey);
                     }
                     break;
-                case READ_BODY: //key.isReadable()
+                case READ_BODY:
                     if (selectionKey.isReadable()) {
                         processBody(connectionWrapper.getConnection(), socketChannel);
                     }
                     break;
-                case WAIT_RESPONSE: //key.isWritable()
+                case WAIT_RESPONSE:
                     if (selectionKey.isWritable()) {
-                        getResponse(connectionWrapper.getConnection(), socketChannel);
+                        getResponse(connectionWrapper.getConnection(), socketChannel, selectionKey);
                     }
                     break;
                 default:
@@ -46,12 +46,12 @@ public class RequestHandler {
             }
         } else {
             switch (connectionWrapper.getConnection().getState()) {
-                case READ_REQUSEST: //key.isWritable()
+                case READ_REQUSEST:
                     if (selectionKey.isWritable()) {
                         sendNewRequest(connectionWrapper.getConnection(), socketChannel);
                     }
                     break;
-                case WRITE_RESPONSE: //key.isReadable()
+                case WRITE_RESPONSE:
                     if (selectionKey.isReadable()) {
                         readAnswer(connectionWrapper.getConnection(), socketChannel, selectionKey);
                     }
@@ -77,7 +77,7 @@ public class RequestHandler {
         return result.getBytes(StandardCharsets.UTF_8);
     }
 
-    private void processHeaders(Connection connection, SocketChannel socketChannel) throws IOException {
+    private void processHeaders(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
         System.out.println("Send headers");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
@@ -87,11 +87,13 @@ public class RequestHandler {
             headerBuffer.put(Arrays.copyOf(buffer.array(), read));
             try {
                 connection.addHeaders(headerBuffer);
-            } catch (InvalidProtocolException e) {
-                System.out.println("Invalid protocol");
-                ByteBuffer byteBuffer = ByteBuffer.wrap(e.getMessage().getBytes(StandardCharsets.UTF_8));
+            } catch (InvalidMethodException | InvalidProtocolException e) {
+                System.out.println("Invalid protocol/method");
+                String errorString = "HTTP/1.0 " + Integer.toString(ErrorCodes.NOT_IMPLEMENTED) + " Not implemented\r\n";
+                ByteBuffer byteBuffer = ByteBuffer.wrap(errorString.getBytes(StandardCharsets.UTF_8));
                 socketChannel.write(byteBuffer);
                 socketChannel.close();
+                selectionKey.cancel();
             }
             if (connection.getConnectionInfo() != null) {
                 if (connection.getConnectionInfo().getMethod().equals("POST")) {
@@ -156,20 +158,17 @@ public class RequestHandler {
         }
         System.out.println("Read answer");
         if (read == -1) {
-            System.out.println("Received response from " + socketChannel.getRemoteAddress());
-            System.out.println("WTF");
-            //System.exit(1);
+            //System.out.println("Received response from " + socketChannel.getRemoteAddress());
             socketChannel.close();
             selectionKey.cancel();
             connection.setState(State.WAIT_RESPONSE);
+            connection.setCanBeClosed(true);
             return;
         }
         System.out.println("Read " + read + " bytes");
-        /*ByteBuffer answerBuffer = ByteBuffer.allocate(read);
-        answerBuffer.put(Arrays.copyOf(buffer.array(), read));*/
         ByteBuffer answerBuffer = ByteBuffer.wrap(buffer.array(), 0, read);
         connection.addResponse(answerBuffer);
-        System.out.println("Answer is " + new String(buffer.array(), StandardCharsets.ISO_8859_1));
+        //System.out.println("Answer is " + new String(buffer.array(), StandardCharsets.ISO_8859_1));
 
         Set<SelectionKey> selectionKeys = proxy.getSelector().keys();
         SocketChannel anotherSocketChannel = proxy.getConnectionMap().get(socketChannel);
@@ -181,12 +180,16 @@ public class RequestHandler {
         }
     }
 
-    private void getResponse(Connection connection, SocketChannel socketChannel) throws IOException {
+    private void getResponse(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
         if (connection.getResponseBuffer() != null) {
             int write = socketChannel.write(connection.getResponseBuffer());
             if (write != 0) {
                 System.out.println("Get response");
                 System.out.println("Write " + write + " bytes");
+            }
+            if (connection.isCanBeClosed()) {
+                socketChannel.close();
+                selectionKey.cancel();
             }
         }
     }

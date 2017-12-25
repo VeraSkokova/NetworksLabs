@@ -10,6 +10,7 @@ public class Connection {
     private ByteBuffer headerBuffer;
     private ByteBuffer bodyBuffer;
     private ByteBuffer responseBuffer;
+    private boolean canBeClosed = false;
 
     private int remainBodyLength;
     private static final String HEADERS_END = "\r\n\r\n";
@@ -38,7 +39,15 @@ public class Connection {
         return responseBuffer;
     }
 
-    public void addHeaders(ByteBuffer byteBuffer) throws InvalidProtocolException {
+    public boolean isCanBeClosed() {
+        return canBeClosed;
+    }
+
+    public void setCanBeClosed(boolean canBeClosed) {
+        this.canBeClosed = canBeClosed;
+    }
+
+    public void addHeaders(ByteBuffer byteBuffer) throws InvalidMethodException, InvalidProtocolException {
         if (headerBuffer == null) {
             headerBuffer = byteBuffer;
         } else {

@@ -9,7 +9,7 @@ import java.util.Map;
 public class HeaderParser {
     private static final String headerSplitter = "\r\n";
 
-    public static ConnectionInfo parseHeaders(byte[] headersByte) throws InvalidProtocolException {
+    public static ConnectionInfo parseHeaders(byte[] headersByte) throws InvalidMethodException, InvalidProtocolException {
         try {
             String headers = new String(headersByte, StandardCharsets.UTF_8);
             System.out.println("Headers: " + headers);
@@ -18,12 +18,17 @@ public class HeaderParser {
 
             String method = startString[0];
             if (!isValidMethod(method)) {
-                throw new InvalidProtocolException(Integer.toString(ErrorCodes.NOT_IMPLEMENTED));
+                throw new InvalidMethodException(Integer.toString(ErrorCodes.NOT_IMPLEMENTED));
             }
 
             URL url = new URL(startString[1]);
 
             String protocol = url.getProtocol();
+
+            if (!isValidProtocol(protocol)) {
+                throw new InvalidProtocolException();
+            }
+
             String host = url.getHost();
             int port = url.getPort();
             String pathAndQuery = url.getPath();
