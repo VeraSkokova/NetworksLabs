@@ -65,7 +65,7 @@ public class Proxy {
         }
     }
 
-    public void connectChannel(InetSocketAddress inetSocketAddress, Connection connection) throws IOException {
+    public void connectChannel(SocketChannel socketChannel, InetSocketAddress inetSocketAddress, Connection connection) throws IOException {
         SocketChannel connectionSocketChannel = SocketChannel.open();
         connectionSocketChannel.configureBlocking(false);
         boolean isConnected = connectionSocketChannel.connect(inetSocketAddress);
@@ -76,6 +76,9 @@ public class Proxy {
             SelectionKey selectionKey = connectionSocketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
             selectionKey.attach(new ConnectionWrapper(connection, false));
         }
+
+        connectionMap.put(socketChannel, connectionSocketChannel);
+        connectionMap.put(connectionSocketChannel, socketChannel);
     }
 
     private InetSocketAddress resolveDns(String rHost, int rPort) throws UnknownHostException {
@@ -84,15 +87,6 @@ public class Proxy {
     }
 
     private void processRequest(SelectionKey selectionKey) throws IOException {
-        /*if (selectionKey.isAcceptable()) {
-            registerClient();
-        } else if (selectionKey.isReadable()) {
-            processInput(selectionKey);
-        } else if (selectionKey.isWritable()) {
-            processOutput(selectionKey);
-        } else if (selectionKey.isConnectable()) {
-            processConnect(selectionKey);
-        }*/
         if (selectionKey.isAcceptable()) {
             registerClient();
         } else if (selectionKey.isConnectable()) {
@@ -201,6 +195,7 @@ public class Proxy {
     private void processConnect(SelectionKey selectionKey) throws IOException {
         SocketChannel connectionSocketChannel = (SocketChannel) selectionKey.channel();
         ConnectionWrapper connectionWrapper = (ConnectionWrapper) selectionKey.attachment();
+        connectionWrapper.getConnection().setState(State.READ_REQUSEST);
         //SocketChannel clientSocketChannel = connectionMap.get(connectionSocketChannel);
 
         boolean isConnected = connectionSocketChannel.finishConnect();
@@ -232,19 +227,29 @@ public class Proxy {
             first.close();
         } catch (IOException e) {
             System.err.println(e.getMessage());
+            e.printStackTrace();
         }
         try {
             second.close();
         } catch (IOException e) {
             System.err.println(e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    private void pauseOption(SelectionKey selectionKey, int option) {
+    public void pauseOption(SelectionKey selectionKey, int option) {
         selectionKey.interestOps(selectionKey.interestOps() & ~option);
     }
 
-    private void resumeOption(SelectionKey selectionKey, int option) {
+    public void resumeOption(SelectionKey selectionKey, int option) {
         selectionKey.interestOps(selectionKey.interestOps() | option);
+    }
+
+    public Selector getSelector() {
+        return selector;
+    }
+
+    public Map<SocketChannel, SocketChannel> getConnectionMap() {
+        return connectionMap;
     }
 }

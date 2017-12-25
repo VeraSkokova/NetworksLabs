@@ -27,13 +27,19 @@ public class RequestHandler {
         if (connectionWrapper.isFrom()) {
             switch (connectionWrapper.getConnection().getState()) {
                 case READ_HEADER: //key.isReadable()
-                    processHeaders(connectionWrapper.getConnection(), socketChannel);
+                    if (selectionKey.isReadable()) {
+                        processHeaders(connectionWrapper.getConnection(), socketChannel);
+                    }
                     break;
                 case READ_BODY: //key.isReadable()
-                    processBody(connectionWrapper.getConnection(), socketChannel);
+                    if (selectionKey.isReadable()) {
+                        processBody(connectionWrapper.getConnection(), socketChannel);
+                    }
                     break;
                 case WAIT_RESPONSE: //key.isWritable()
-                    getResponse(connectionWrapper.getConnection(), socketChannel);
+                    if (selectionKey.isWritable()) {
+                        getResponse(connectionWrapper.getConnection(), socketChannel);
+                    }
                     break;
                 default:
                     break;
@@ -41,10 +47,14 @@ public class RequestHandler {
         } else {
             switch (connectionWrapper.getConnection().getState()) {
                 case READ_REQUSEST: //key.isWritable()
-                    sendNewRequest(connectionWrapper.getConnection(), socketChannel);
+                    if (selectionKey.isWritable()) {
+                        sendNewRequest(connectionWrapper.getConnection(), socketChannel);
+                    }
                     break;
                 case WRITE_RESPONSE: //key.isReadable()
-                    readAnswer(connectionWrapper.getConnection(), socketChannel, selectionKey);
+                    if (selectionKey.isReadable()) {
+                        readAnswer(connectionWrapper.getConnection(), socketChannel, selectionKey);
+                    }
                     break;
                 default:
                     break;
@@ -68,19 +78,27 @@ public class RequestHandler {
     }
 
     private void processHeaders(Connection connection, SocketChannel socketChannel) throws IOException {
+        System.out.println("Send headers");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
 
         if (read != -1) {
             ByteBuffer headerBuffer = ByteBuffer.allocate(read);
             headerBuffer.put(Arrays.copyOf(buffer.array(), read));
-            connection.addHeaders(headerBuffer);
+            try {
+                connection.addHeaders(headerBuffer);
+            } catch (InvalidProtocolException e) {
+                System.out.println("Invalid protocol");
+                ByteBuffer byteBuffer = ByteBuffer.wrap(e.getMessage().getBytes(StandardCharsets.UTF_8));
+                socketChannel.write(byteBuffer);
+                socketChannel.close();
+            }
             if (connection.getConnectionInfo() != null) {
                 if (connection.getConnectionInfo().getMethod().equals("POST")) {
                     connection.setState(State.READ_BODY);
                 } else {
                     connection.setState(State.WAIT_RESPONSE);
-                    proxy.connectChannel(new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
+                    proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
                             connection.getConnectionInfo().getPort()), connection);
                 }
             }
@@ -88,6 +106,7 @@ public class RequestHandler {
     }
 
     private void processBody(Connection connection, SocketChannel socketChannel) throws IOException {
+        System.out.println("Send body");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
 
@@ -98,47 +117,77 @@ public class RequestHandler {
 
             if (connection.getRemainBodyLength() <= connection.getConnectionInfo().getContentLength()) {
                 connection.setState(State.WAIT_RESPONSE);
-                proxy.connectChannel(new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
+                proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
                         connection.getConnectionInfo().getPort()), connection);
             }
         }
     }
 
     private void sendNewRequest(Connection connection, SocketChannel socketChannel) throws IOException {
+        //System.out.println("Send new request");
         byte[] newHeaders = makeNewRequest(connection.getConnectionInfo());
-        ByteBuffer buffer;
+        System.out.println("Writing to channel " + new String(newHeaders, StandardCharsets.UTF_8));
+        ByteBuffer buffer = ByteBuffer.wrap(newHeaders);
+        int write = 0;
         if (connection.getConnectionInfo().getMethod().equals("POST")) {
             byte[] bodyBytes = connection.getBodyBuffer().array();
-            buffer = ByteBuffer.allocate(newHeaders.length + bodyBytes.length);
-            buffer.put(newHeaders);
-            buffer.put(bodyBytes);
+            ByteBuffer postBuffer = ByteBuffer.allocate(buffer.capacity() + connection.getBodyBuffer().capacity());
+            postBuffer.put(newHeaders);
+            postBuffer.put(bodyBytes);
+            postBuffer.flip();
+            write = socketChannel.write(postBuffer);
         } else {
-            buffer = ByteBuffer.allocate(newHeaders.length);
-            buffer.put(newHeaders);
+            write = socketChannel.write(buffer);
         }
-        int write = socketChannel.write(buffer);
-        System.out.println("Write " + write + " bytes");
+        if (write != 0) {
+            System.out.println("Send new request");
+            System.out.println("Write " + write + " bytes");
+        }
+        if (write != 0) {
+            connection.setState(State.WRITE_RESPONSE);
+        }
     }
 
     private void readAnswer(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
+        if (read == 0) {
+            return;
+        }
+        System.out.println("Read answer");
         if (read == -1) {
             System.out.println("Received response from " + socketChannel.getRemoteAddress());
+            System.out.println("WTF");
+            //System.exit(1);
             socketChannel.close();
             selectionKey.cancel();
             connection.setState(State.WAIT_RESPONSE);
             return;
         }
-        ByteBuffer answerBuffer = ByteBuffer.allocate(read);
-        answerBuffer.put(Arrays.copyOf(buffer.array(), read));
+        System.out.println("Read " + read + " bytes");
+        /*ByteBuffer answerBuffer = ByteBuffer.allocate(read);
+        answerBuffer.put(Arrays.copyOf(buffer.array(), read));*/
+        ByteBuffer answerBuffer = ByteBuffer.wrap(buffer.array(), 0, read);
         connection.addResponse(answerBuffer);
+        System.out.println("Answer is " + new String(buffer.array(), StandardCharsets.ISO_8859_1));
+
+        Set<SelectionKey> selectionKeys = proxy.getSelector().keys();
+        SocketChannel anotherSocketChannel = proxy.getConnectionMap().get(socketChannel);
+        for (SelectionKey key : selectionKeys) {
+            if (key.channel().equals(anotherSocketChannel)) {
+                proxy.resumeOption(key, SelectionKey.OP_WRITE);
+                proxy.pauseOption(key, SelectionKey.OP_READ);
+            }
+        }
     }
 
     private void getResponse(Connection connection, SocketChannel socketChannel) throws IOException {
         if (connection.getResponseBuffer() != null) {
-            socketChannel.write(connection.getResponseBuffer());
-
+            int write = socketChannel.write(connection.getResponseBuffer());
+            if (write != 0) {
+                System.out.println("Get response");
+                System.out.println("Write " + write + " bytes");
+            }
         }
     }
 

@@ -9,13 +9,17 @@ import java.util.Map;
 public class HeaderParser {
     private static final String headerSplitter = "\r\n";
 
-    public static ConnectionInfo parseHeaders(byte[] headersByte) {
+    public static ConnectionInfo parseHeaders(byte[] headersByte) throws InvalidProtocolException {
         try {
             String headers = new String(headersByte, StandardCharsets.UTF_8);
+            System.out.println("Headers: " + headers);
             String[] headersRows = headers.split(headerSplitter);
             String[] startString = headersRows[0].split(" ");
 
             String method = startString[0];
+            if (!isValidMethod(method)) {
+                throw new InvalidProtocolException(Integer.toString(ErrorCodes.NOT_IMPLEMENTED));
+            }
 
             URL url = new URL(startString[1]);
 
@@ -35,11 +39,17 @@ public class HeaderParser {
                 headerMap.put(headerRow[0], headerRow[1]);
             }
 
+            if(port == -1) {
+                port = 80;
+            }
+
             if (isValidMethod(method) && isValidProtocol(protocol) && isValidVersion(version)) {
                 return new ConnectionInfo(method, protocol, host, port, pathAndQuery, version, headerMap);
             }
         } catch (MalformedURLException e) {
             System.err.println(e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
         }
 
         return null;

@@ -38,7 +38,7 @@ public class Connection {
         return responseBuffer;
     }
 
-    public void addHeaders(ByteBuffer byteBuffer) {
+    public void addHeaders(ByteBuffer byteBuffer) throws InvalidProtocolException {
         if (headerBuffer == null) {
             headerBuffer = byteBuffer;
         } else {
