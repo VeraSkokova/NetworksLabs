@@ -18,6 +18,7 @@ public class HeaderParser {
 
             String method = startString[0];
             if (!isValidMethod(method)) {
+                System.out.println("Invalid method: " + method);
                 throw new InvalidMethodException(Integer.toString(ErrorCodes.NOT_IMPLEMENTED));
             }
 
@@ -26,6 +27,7 @@ public class HeaderParser {
             String protocol = url.getProtocol();
 
             if (!isValidProtocol(protocol)) {
+                System.out.println("Invalid protocol: " + protocol);
                 throw new InvalidProtocolException();
             }
 

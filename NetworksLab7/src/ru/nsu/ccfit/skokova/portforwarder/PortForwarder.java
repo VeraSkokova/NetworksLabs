@@ -19,6 +19,7 @@ public class PortForwarder {
 
     private Map<SocketChannel, SocketChannel> connectionMap = new HashMap<>();
     private Map<SocketChannel, ByteBuffer> bytesToSend = new HashMap<>();
+    private Map<SocketChannel, Boolean> isClosableFromOutputMap = new HashMap<>();
 
     public PortForwarder(int lPort, int rPort, String rHost) {
         this.lPort = lPort;
@@ -132,6 +133,7 @@ public class PortForwarder {
                     for (SelectionKey key : keys) {
                         if (key.channel().equals(anotherSocketChannel)) {
                             resumeOption(key, SelectionKey.OP_WRITE);
+                            isClosableFromOutputMap.put(anotherSocketChannel, true);
                         }
                     }
                 } else {
@@ -140,6 +142,9 @@ public class PortForwarder {
                 }
 
                 if ((bytesToSend.get(socketChannel).position() == 0) && (bytesToSend.get(anotherSocketChannel).position() == 0)) {
+                    throw new ClosedChannelException();
+                }
+                if (isClosableFromOutputMap.containsKey(socketChannel)) {
                     throw new ClosedChannelException();
                 }
                 return;
@@ -165,19 +170,36 @@ public class PortForwarder {
         try {
             SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
             SocketChannel anotherSocketChannel = connectionMap.get(socketChannel);
+            Set<SelectionKey> keys = selector.keys();
 
             //System.out.println("New output from local " + socketChannel.getLocalAddress() + " remote " + socketChannel.getRemoteAddress());
             ByteBuffer buffer = bytesToSend.get(anotherSocketChannel);
             buffer.flip();
             int write = socketChannel.write(buffer);
             System.out.println("Write " + write + " bytes to " + socketChannel.getRemoteAddress());
-            buffer.compact();
             if (!buffer.hasRemaining()) {
                 System.out.println("Buffer is full (in processOutput)");
-                //pauseOption(selectionKey, SelectionKey.OP_WRITE);
+                pauseOption(selectionKey, SelectionKey.OP_WRITE);
             }
-            pauseOption(selectionKey, SelectionKey.OP_WRITE);
-            Set<SelectionKey> keys = selector.keys();
+            buffer.compact();
+
+            if (isClosableFromOutputMap.containsKey(socketChannel)) {
+                if (bytesToSend.get(anotherSocketChannel).position() == 0) {
+                    pauseOption(selectionKey, SelectionKey.OP_WRITE);
+                    socketChannel.shutdownOutput();
+                    if ((bytesToSend.get(socketChannel).position() == 0) && (isClosableFromOutputMap.containsKey(anotherSocketChannel))) {
+                        throw new ClosedChannelException();
+                    } else {
+                        for (SelectionKey key : keys) {
+                            if (key.channel().equals(anotherSocketChannel)) {
+                                resumeOption(key, SelectionKey.OP_WRITE);
+                                isClosableFromOutputMap.put(anotherSocketChannel, true);
+                            }
+                        }
+                    }
+                }
+                //return;
+            }
             for (SelectionKey key : keys) {
                 if (key.channel().equals(anotherSocketChannel)) {
                     resumeOption(key, SelectionKey.OP_READ);
@@ -185,8 +207,11 @@ public class PortForwarder {
             }
             //System.out.println("Wrote data from output");
         } catch (ClosedChannelException e) {
-            System.out.println("Another channel closed");
-            System.exit(1);
+            System.out.println("Closing");
+            SocketChannel first = (SocketChannel) selectionKey.channel();
+            SocketChannel second = connectionMap.get(first);
+            closeChannels(first, second);
+            deleteChannels(first, second);
         }
     }
 

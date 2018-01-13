@@ -11,6 +11,7 @@ public class Connection {
     private ByteBuffer bodyBuffer;
     private ByteBuffer responseBuffer;
     private boolean canBeClosed = false;
+    private boolean needBody = false;
 
     private int remainBodyLength;
     private static final String HEADERS_END = "\r\n\r\n";
@@ -48,13 +49,15 @@ public class Connection {
     }
 
     public void addHeaders(ByteBuffer byteBuffer) throws InvalidMethodException, InvalidProtocolException {
+        System.out.println();
         if (headerBuffer == null) {
             headerBuffer = byteBuffer;
         } else {
-            ByteBuffer newBuffer = ByteBuffer.allocate(headerBuffer.capacity() + byteBuffer.capacity());
-            newBuffer.put(headerBuffer);
-            newBuffer.put(byteBuffer);
-            newBuffer.flip();
+            byte[] newBytes = new byte[headerBuffer.array().length + byteBuffer.array().length];
+            System.arraycopy(headerBuffer.array(), 0, newBytes, 0, headerBuffer.array().length);
+            System.arraycopy(byteBuffer.array(), 0, newBytes, headerBuffer.array().length, byteBuffer.array().length);
+            ByteBuffer newBuffer = ByteBuffer.allocate(newBytes.length);
+            newBuffer.put(newBytes);
             headerBuffer = newBuffer;
         }
 
@@ -88,7 +91,8 @@ public class Connection {
             newByteBuffer.flip();
 
             if (headersEndIndex != headerBuffer.array().length - 1) {
-                bodyBuffer = ByteBuffer.wrap(headerBuffer.array(), headersEndIndex + 1, headerBuffer.array().length - headersEndIndex - 1);
+                byte[] bodyBytes = Arrays.copyOfRange(headerBuffer.array(), headersEndIndex + 1, headerBuffer.array().length);
+                bodyBuffer = ByteBuffer.wrap(bodyBytes);
             }
 
             headerBuffer = newByteBuffer;
@@ -98,6 +102,11 @@ public class Connection {
                 this.remainBodyLength = connectionInfo.getContentLength();
                 if (bodyBuffer != null) {
                     remainBodyLength -= bodyBuffer.array().length;
+                    if (remainBodyLength == 0) {
+                        addBody(bodyBuffer);
+                    } else {
+                        needBody = true;
+                    }
                 }
             }
         }
@@ -107,13 +116,12 @@ public class Connection {
         if (bodyBuffer == null) {
             bodyBuffer = byteBuffer;
         } else {
-            ByteBuffer newBuffer = ByteBuffer.allocate(bodyBuffer.capacity() + byteBuffer.capacity());
-            newBuffer.put(bodyBuffer);
-            newBuffer.put(byteBuffer);
-            newBuffer.flip();
+            byte[] newBytes = new byte[bodyBuffer.array().length + byteBuffer.array().length];
+            System.arraycopy(bodyBuffer.array(), 0, newBytes, 0, bodyBuffer.array().length);
+            System.arraycopy(byteBuffer.array(), 0, newBytes, bodyBuffer.array().length, byteBuffer.array().length);
+            ByteBuffer newBuffer = ByteBuffer.allocate(newBytes.length);
+            newBuffer.put(newBytes);
             bodyBuffer = newBuffer;
-
-            remainBodyLength -= byteBuffer.array().length;
         }
     }
 
@@ -126,6 +134,8 @@ public class Connection {
             newBuffer.put(byteBuffer);
             newBuffer.flip();
             responseBuffer = newBuffer;
+
+            remainBodyLength -= byteBuffer.array().length;
         }
     }
 
@@ -135,5 +145,9 @@ public class Connection {
 
     public int getRemainBodyLength() {
         return remainBodyLength;
+    }
+
+    public boolean isNeedBody() {
+        return needBody;
     }
 }

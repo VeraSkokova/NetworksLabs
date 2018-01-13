@@ -106,8 +106,6 @@ public class Proxy {
 
             SelectionKey selectionKey = clientSocketChannel.register(selector, SelectionKey.OP_READ);
             selectionKey.attach(new ConnectionWrapper(new Connection(), true));
-
-            bytesToSend.put(clientSocketChannel, ByteBuffer.allocate(BUF_SIZE));
         } catch (NullPointerException e) {
             //System.out.println("null caught");
         }
@@ -134,11 +132,11 @@ public class Proxy {
 
     }
 
-    public void pauseOption(SelectionKey selectionKey, int option) {
+    void pauseOption(SelectionKey selectionKey, int option) {
         selectionKey.interestOps(selectionKey.interestOps() & ~option);
     }
 
-    public void resumeOption(SelectionKey selectionKey, int option) {
+    void resumeOption(SelectionKey selectionKey, int option) {
         selectionKey.interestOps(selectionKey.interestOps() | option);
     }
 

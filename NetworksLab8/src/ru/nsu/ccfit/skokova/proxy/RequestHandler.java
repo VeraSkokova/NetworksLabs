@@ -12,7 +12,7 @@ import java.util.Iterator;
 import java.util.Set;
 
 public class RequestHandler {
-    private static final int BUF_SIZE = 48 * 1024;
+    private static final int BUF_SIZE = 200;//= 50;//= 48 * 1024;
     private static final String headerSplitter = "\r\n";
     private Proxy proxy;
 
@@ -78,7 +78,7 @@ public class RequestHandler {
     }
 
     private void processHeaders(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
-        System.out.println("Send headers");
+        //System.out.println("Send headers");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
 
@@ -96,7 +96,8 @@ public class RequestHandler {
                 selectionKey.cancel();
             }
             if (connection.getConnectionInfo() != null) {
-                if (connection.getConnectionInfo().getMethod().equals("POST")) {
+                if (connection.isNeedBody()) {
+                    //System.out.println("Need read body");
                     connection.setState(State.READ_BODY);
                 } else {
                     connection.setState(State.WAIT_RESPONSE);
@@ -104,13 +105,19 @@ public class RequestHandler {
                             connection.getConnectionInfo().getPort()), connection);
                 }
             }
+        } else {
+            socketChannel.close();
+            if (selectionKey.isValid()) {
+                selectionKey.cancel();
+            }
         }
     }
 
     private void processBody(Connection connection, SocketChannel socketChannel) throws IOException {
-        System.out.println("Send body");
+        //System.out.println("Send body");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
+        System.out.println("Read in body " + read);
 
         if (read != -1) {
             ByteBuffer bodyBuffer = ByteBuffer.allocate(read);
@@ -122,6 +129,8 @@ public class RequestHandler {
                 proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
                         connection.getConnectionInfo().getPort()), connection);
             }
+        } else {
+            connection.setState(State.WAIT_RESPONSE);
         }
     }
 
