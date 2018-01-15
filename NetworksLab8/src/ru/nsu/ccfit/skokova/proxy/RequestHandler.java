@@ -3,17 +3,15 @@ package ru.nsu.ccfit.skokova.proxy;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.Set;
 
 public class RequestHandler {
-    private static final int BUF_SIZE = 200;//= 50;//= 48 * 1024;
-    private static final String headerSplitter = "\r\n";
+    private static final int BUF_SIZE = 48 * 1024;//= 20;
     private Proxy proxy;
 
     public RequestHandler(Proxy proxy) {
@@ -33,7 +31,7 @@ public class RequestHandler {
                     break;
                 case READ_BODY:
                     if (selectionKey.isReadable()) {
-                        processBody(connectionWrapper.getConnection(), socketChannel);
+                        processBody(connectionWrapper.getConnection(), socketChannel, selectionKey);
                     }
                     break;
                 case WAIT_RESPONSE:
@@ -62,23 +60,8 @@ public class RequestHandler {
         }
     }
 
-    public byte[] makeNewRequest(ConnectionInfo connectionInfo) {
-        changeConnectionInfo(connectionInfo);
-        String result = connectionInfo.getMethod() + " ";
-        result += "/" + connectionInfo.getPathAndQuery() + " " + "HTTP/" + connectionInfo.getVersion() + headerSplitter;
-        Set<String> keySet = connectionInfo.getHeadersMap().keySet();
-        for (Iterator<String> iterator = keySet.iterator(); iterator.hasNext(); ) {
-            String key = iterator.next();
-            String header = key + ": " + connectionInfo.getHeadersMap().get(key) + headerSplitter;
-            result += header;
-        }
-        result += headerSplitter;
-
-        return result.getBytes(StandardCharsets.UTF_8);
-    }
-
     private void processHeaders(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
-        //System.out.println("Send headers");
+        System.out.println("Got headers from client");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
 
@@ -89,23 +72,39 @@ public class RequestHandler {
                 connection.addHeaders(headerBuffer);
             } catch (InvalidMethodException | InvalidProtocolException e) {
                 System.out.println("Invalid protocol/method");
-                String errorString = "HTTP/1.0 " + Integer.toString(ErrorCodes.NOT_IMPLEMENTED) + " Not implemented\r\n";
-                ByteBuffer byteBuffer = ByteBuffer.wrap(errorString.getBytes(StandardCharsets.UTF_8));
-                socketChannel.write(byteBuffer);
-                socketChannel.close();
-                selectionKey.cancel();
+                String errorString = "HTTP/1.0 " + Integer.toString(ErrorCodes.NOT_IMPLEMENTED) + " Not Implemented";
+                ByteBuffer byteBuffer = ByteBuffer.wrap(errorString.getBytes(StandardCharsets.ISO_8859_1));
+                proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
+                proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
+                connection.addResponse(byteBuffer);
+                connection.setState(State.WAIT_RESPONSE);
+                connection.setCanBeClosed(true);
+                return;
             }
             if (connection.getConnectionInfo() != null) {
                 if (connection.isNeedBody()) {
-                    //System.out.println("Need read body");
                     connection.setState(State.READ_BODY);
                 } else {
+                    proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
+                    proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
                     connection.setState(State.WAIT_RESPONSE);
-                    proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
-                            connection.getConnectionInfo().getPort()), connection);
+                    try {
+                        proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
+                                connection.getConnectionInfo().getPort()), connection);
+                    } catch (UnknownHostException e) {
+                        System.out.println("Invalid address");
+                        String errorString = "HTTP/1.0 " + Integer.toString(ErrorCodes.BAD_GATEWAY) + " Bad Gateway";
+                        ByteBuffer byteBuffer = ByteBuffer.wrap(errorString.getBytes(StandardCharsets.ISO_8859_1));
+                        connection.setState(State.WAIT_RESPONSE);
+                        proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
+                        proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
+                        connection.addResponse(byteBuffer);
+                        connection.setCanBeClosed(true);
+                    }
                 }
             }
         } else {
+            System.out.println("Reached end of stream :(");
             socketChannel.close();
             if (selectionKey.isValid()) {
                 selectionKey.cancel();
@@ -113,8 +112,8 @@ public class RequestHandler {
         }
     }
 
-    private void processBody(Connection connection, SocketChannel socketChannel) throws IOException {
-        //System.out.println("Send body");
+    private void processBody(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
+        System.out.println("Got body from client");
         ByteBuffer buffer = ByteBuffer.allocate(BUF_SIZE);
         int read = socketChannel.read(buffer);
         System.out.println("Read in body " + read);
@@ -123,40 +122,36 @@ public class RequestHandler {
             ByteBuffer bodyBuffer = ByteBuffer.allocate(read);
             bodyBuffer.put(Arrays.copyOf(buffer.array(), read));
             connection.addBody(bodyBuffer);
+            System.out.println("Remaining body : " + connection.getRemainBodyLength());
 
-            if (connection.getRemainBodyLength() <= connection.getConnectionInfo().getContentLength()) {
+            if (connection.getRemainBodyLength() == 0) {
                 connection.setState(State.WAIT_RESPONSE);
+                proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
+                proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
                 proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
                         connection.getConnectionInfo().getPort()), connection);
             }
         } else {
-            connection.setState(State.WAIT_RESPONSE);
+            System.out.println("Reached end of stream");
+            /*connection.setState(State.WAIT_RESPONSE);
+            proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
+            proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
+            proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
+                    connection.getConnectionInfo().getPort()), connection);*/
         }
     }
 
     private void sendNewRequest(Connection connection, SocketChannel socketChannel) throws IOException {
-        //System.out.println("Send new request");
-        byte[] newHeaders = makeNewRequest(connection.getConnectionInfo());
-        System.out.println("Writing to channel " + new String(newHeaders, StandardCharsets.UTF_8));
-        ByteBuffer buffer = ByteBuffer.wrap(newHeaders);
-        int write = 0;
-        if (connection.getConnectionInfo().getMethod().equals("POST")) {
-            byte[] bodyBytes = connection.getBodyBuffer().array();
-            ByteBuffer postBuffer = ByteBuffer.allocate(buffer.capacity() + connection.getBodyBuffer().capacity());
-            postBuffer.put(newHeaders);
-            postBuffer.put(bodyBytes);
-            postBuffer.flip();
-            write = socketChannel.write(postBuffer);
-        } else {
-            write = socketChannel.write(buffer);
+        if (connection.getRequestBuffer().position() != 0) {
+            connection.getRequestBuffer().flip();
         }
+        int write = socketChannel.write(connection.getRequestBuffer());
         if (write != 0) {
-            System.out.println("Send new request");
+            System.out.println("Sending new request");
             System.out.println("Write " + write + " bytes");
-        }
-        if (write != 0) {
             connection.setState(State.WRITE_RESPONSE);
         }
+        connection.getRequestBuffer().compact();
     }
 
     private void readAnswer(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
@@ -167,7 +162,6 @@ public class RequestHandler {
         }
         System.out.println("Read answer");
         if (read == -1) {
-            //System.out.println("Received response from " + socketChannel.getRemoteAddress());
             socketChannel.close();
             selectionKey.cancel();
             connection.setState(State.WAIT_RESPONSE);
@@ -177,36 +171,28 @@ public class RequestHandler {
         System.out.println("Read " + read + " bytes");
         ByteBuffer answerBuffer = ByteBuffer.wrap(buffer.array(), 0, read);
         connection.addResponse(answerBuffer);
-        //System.out.println("Answer is " + new String(buffer.array(), StandardCharsets.ISO_8859_1));
 
-        Set<SelectionKey> selectionKeys = proxy.getSelector().keys();
         SocketChannel anotherSocketChannel = proxy.getConnectionMap().get(socketChannel);
-        for (SelectionKey key : selectionKeys) {
-            if (key.channel().equals(anotherSocketChannel)) {
-                proxy.resumeOption(key, SelectionKey.OP_WRITE);
-                proxy.pauseOption(key, SelectionKey.OP_READ);
-            }
-        }
+        SelectionKey key = anotherSocketChannel.keyFor(proxy.getSelector());
+        proxy.resumeOption(key, SelectionKey.OP_WRITE);
+        proxy.pauseOption(key, SelectionKey.OP_READ);
     }
 
     private void getResponse(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
         if (connection.getResponseBuffer() != null) {
+            if (connection.getResponseBuffer().position() != 0) {
+                connection.getResponseBuffer().flip();
+            }
             int write = socketChannel.write(connection.getResponseBuffer());
             if (write != 0) {
-                System.out.println("Get response");
                 System.out.println("Write " + write + " bytes");
             }
+            connection.getResponseBuffer().compact();
             if (connection.isCanBeClosed()) {
+                System.out.println("Closing");
                 socketChannel.close();
                 selectionKey.cancel();
             }
         }
-    }
-
-    private void changeConnectionInfo(ConnectionInfo connectionInfo) {
-        if (connectionInfo.getPort() == -1) {
-            connectionInfo.setPort(80);
-        }
-        connectionInfo.getHeadersMap().put("Connection", "close");
     }
 }

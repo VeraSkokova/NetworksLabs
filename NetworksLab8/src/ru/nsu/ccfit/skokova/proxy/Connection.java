@@ -3,18 +3,19 @@ package ru.nsu.ccfit.skokova.proxy;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Set;
 
 public class Connection {
+    private static final String HEADER_SPLITTER = "\r\n";
+    private static final String HEADERS_END = "\r\n\r\n";
     private State state;
     private ConnectionInfo connectionInfo;
-    private ByteBuffer headerBuffer;
-    private ByteBuffer bodyBuffer;
+    private ByteBuffer requestBuffer;
     private ByteBuffer responseBuffer;
     private boolean canBeClosed = false;
     private boolean needBody = false;
-
     private int remainBodyLength;
-    private static final String HEADERS_END = "\r\n\r\n";
 
     public Connection() {
         this.state = State.READ_HEADER;
@@ -26,14 +27,6 @@ public class Connection {
 
     public void setState(State state) {
         this.state = state;
-    }
-
-    public ByteBuffer getHeaderBuffer() {
-        return headerBuffer;
-    }
-
-    public ByteBuffer getBodyBuffer() {
-        return bodyBuffer;
     }
 
     public ByteBuffer getResponseBuffer() {
@@ -50,18 +43,18 @@ public class Connection {
 
     public void addHeaders(ByteBuffer byteBuffer) throws InvalidMethodException, InvalidProtocolException {
         System.out.println();
-        if (headerBuffer == null) {
-            headerBuffer = byteBuffer;
+        if (requestBuffer == null) {
+            requestBuffer = byteBuffer;
         } else {
-            byte[] newBytes = new byte[headerBuffer.array().length + byteBuffer.array().length];
-            System.arraycopy(headerBuffer.array(), 0, newBytes, 0, headerBuffer.array().length);
-            System.arraycopy(byteBuffer.array(), 0, newBytes, headerBuffer.array().length, byteBuffer.array().length);
+            byte[] newBytes = new byte[requestBuffer.array().length + byteBuffer.array().length];
+            System.arraycopy(requestBuffer.array(), 0, newBytes, 0, requestBuffer.array().length);
+            System.arraycopy(byteBuffer.array(), 0, newBytes, requestBuffer.array().length, byteBuffer.array().length);
             ByteBuffer newBuffer = ByteBuffer.allocate(newBytes.length);
             newBuffer.put(newBytes);
-            headerBuffer = newBuffer;
+            requestBuffer = newBuffer;
         }
 
-        byte[] headerBytes = headerBuffer.array();
+        byte[] headerBytes = requestBuffer.array();//= headerBuffer.array();
         int headersEndIndex = -1;
         byte[] headersEndBytes = HEADERS_END.getBytes(StandardCharsets.UTF_8);
         int coincidenceCount = 0;
@@ -86,25 +79,18 @@ public class Connection {
         }
 
         if (headersEndIndex != -1) {
-            ByteBuffer newByteBuffer = ByteBuffer.allocate(headersEndIndex + 1);
-            newByteBuffer.put(Arrays.copyOf(headerBuffer.array(), headersEndIndex + 1));
-            newByteBuffer.flip();
-
-            if (headersEndIndex != headerBuffer.array().length - 1) {
-                byte[] bodyBytes = Arrays.copyOfRange(headerBuffer.array(), headersEndIndex + 1, headerBuffer.array().length);
-                bodyBuffer = ByteBuffer.wrap(bodyBytes);
-            }
-
-            headerBuffer = newByteBuffer;
-            ConnectionInfo connectionInfo = HeaderParser.parseHeaders(headerBuffer.array());
+            byte[] headerPart = Arrays.copyOf(requestBuffer.array(), headersEndIndex + 1);
+            ConnectionInfo connectionInfo = HeaderParser.parseHeaders(headerPart);
             if (connectionInfo != null) {
                 this.connectionInfo = connectionInfo;
+                byte[] oldBytes = Arrays.copyOf(requestBuffer.array(), requestBuffer.array().length);
+                makeNewRequest(connectionInfo);
                 this.remainBodyLength = connectionInfo.getContentLength();
-                if (bodyBuffer != null) {
-                    remainBodyLength -= bodyBuffer.array().length;
-                    if (remainBodyLength == 0) {
-                        addBody(bodyBuffer);
-                    } else {
+                if (headersEndIndex != oldBytes.length - 1) {
+                    byte[] bodyBytes = Arrays.copyOfRange(oldBytes, headersEndIndex + 1, oldBytes.length);
+                    ByteBuffer bodyBuffer = ByteBuffer.wrap(bodyBytes);
+                    addBody(bodyBuffer);
+                    if (remainBodyLength != 0) {
                         needBody = true;
                     }
                 }
@@ -113,16 +99,14 @@ public class Connection {
     }
 
     public void addBody(ByteBuffer byteBuffer) {
-        if (bodyBuffer == null) {
-            bodyBuffer = byteBuffer;
-        } else {
-            byte[] newBytes = new byte[bodyBuffer.array().length + byteBuffer.array().length];
-            System.arraycopy(bodyBuffer.array(), 0, newBytes, 0, bodyBuffer.array().length);
-            System.arraycopy(byteBuffer.array(), 0, newBytes, bodyBuffer.array().length, byteBuffer.array().length);
-            ByteBuffer newBuffer = ByteBuffer.allocate(newBytes.length);
-            newBuffer.put(newBytes);
-            bodyBuffer = newBuffer;
-        }
+        byte[] newBytes = new byte[requestBuffer.array().length + byteBuffer.array().length];
+        System.arraycopy(requestBuffer.array(), 0, newBytes, 0, requestBuffer.array().length);
+        System.arraycopy(byteBuffer.array(), 0, newBytes, requestBuffer.array().length, byteBuffer.array().length);
+        ByteBuffer newBuffer = ByteBuffer.allocate(newBytes.length);
+        newBuffer.put(newBytes);
+        requestBuffer = newBuffer;
+
+        remainBodyLength -= byteBuffer.array().length;
     }
 
     public void addResponse(ByteBuffer byteBuffer) {
@@ -134,8 +118,6 @@ public class Connection {
             newBuffer.put(byteBuffer);
             newBuffer.flip();
             responseBuffer = newBuffer;
-
-            remainBodyLength -= byteBuffer.array().length;
         }
     }
 
@@ -150,4 +132,32 @@ public class Connection {
     public boolean isNeedBody() {
         return needBody;
     }
+
+    public ByteBuffer getRequestBuffer() {
+        return requestBuffer;
+    }
+
+    private void makeNewRequest(ConnectionInfo connectionInfo) {
+        changeConnectionInfo(connectionInfo);
+        String result = connectionInfo.getMethod() + " ";
+        result += "/" + connectionInfo.getPathAndQuery() + " " + "HTTP/" + connectionInfo.getVersion() + HEADER_SPLITTER;
+        Set<String> keySet = connectionInfo.getHeadersMap().keySet();
+        for (Iterator<String> iterator = keySet.iterator(); iterator.hasNext(); ) {
+            String key = iterator.next();
+            String header = key + ": " + connectionInfo.getHeadersMap().get(key) + HEADER_SPLITTER;
+            result += header;
+        }
+        result += HEADER_SPLITTER;
+
+        requestBuffer = ByteBuffer.wrap(result.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void changeConnectionInfo(ConnectionInfo connectionInfo) {
+        if (connectionInfo.getPort() == -1) {
+            connectionInfo.setPort(80);
+        }
+        connectionInfo.getHeadersMap().put("Connection", "close");
+    }
+
+
 }

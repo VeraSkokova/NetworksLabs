@@ -73,10 +73,10 @@ public class Proxy {
         boolean isConnected = connectionSocketChannel.connect(inetSocketAddress);
         if (!isConnected) {
             SelectionKey selectionKey = connectionSocketChannel.register(selector, SelectionKey.OP_CONNECT);
-            selectionKey.attach(new ConnectionWrapper(connection, false));
+            selectionKey.attach(new ConnectionWrapper(connection, false, socketChannel.keyFor(selector)));
         } else {
             SelectionKey selectionKey = connectionSocketChannel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-            selectionKey.attach(new ConnectionWrapper(connection, false));
+            selectionKey.attach(new ConnectionWrapper(connection, false, socketChannel.keyFor(selector)));
         }
 
         connectionMap.put(socketChannel, connectionSocketChannel);
@@ -105,7 +105,7 @@ public class Proxy {
             System.out.println("New connection from local " + clientSocketChannel.getLocalAddress() + " remote " + clientSocketChannel.getRemoteAddress());
 
             SelectionKey selectionKey = clientSocketChannel.register(selector, SelectionKey.OP_READ);
-            selectionKey.attach(new ConnectionWrapper(new Connection(), true));
+            selectionKey.attach(new ConnectionWrapper(new Connection(), true, null));
         } catch (NullPointerException e) {
             //System.out.println("null caught");
         }

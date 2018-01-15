@@ -11,8 +11,8 @@ public class HeaderParser {
 
     public static ConnectionInfo parseHeaders(byte[] headersByte) throws InvalidMethodException, InvalidProtocolException {
         try {
-            String headers = new String(headersByte, StandardCharsets.UTF_8);
-            System.out.println("Headers: " + headers);
+            String headers = new String(headersByte, StandardCharsets.ISO_8859_1);
+            //System.out.println("Headers: " + headers);
             String[] headersRows = headers.split(headerSplitter);
             String[] startString = headersRows[0].split(" ");
 
