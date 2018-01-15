@@ -104,7 +104,7 @@ public class RequestHandler {
                 }
             }
         } else {
-            System.out.println("Reached end of stream :(");
+            System.out.println("Reached end of stream");
             socketChannel.close();
             if (selectionKey.isValid()) {
                 selectionKey.cancel();
@@ -133,11 +133,10 @@ public class RequestHandler {
             }
         } else {
             System.out.println("Reached end of stream");
-            /*connection.setState(State.WAIT_RESPONSE);
-            proxy.pauseOption(selectionKey, SelectionKey.OP_READ);
-            proxy.resumeOption(selectionKey, SelectionKey.OP_WRITE);
-            proxy.connectChannel(socketChannel, new InetSocketAddress((InetAddress.getByName(connection.getConnectionInfo().getHost())),
-                    connection.getConnectionInfo().getPort()), connection);*/
+            socketChannel.close();
+            if (selectionKey.isValid()) {
+                selectionKey.cancel();
+            }
         }
     }
 
@@ -152,6 +151,10 @@ public class RequestHandler {
             connection.setState(State.WRITE_RESPONSE);
         }
         connection.getRequestBuffer().compact();
+        if (connection.getRequestBuffer().remaining() == 0) {
+            proxy.pauseOption(socketChannel.keyFor(proxy.getSelector()), SelectionKey.OP_WRITE);
+            socketChannel.shutdownOutput();
+        }
     }
 
     private void readAnswer(Connection connection, SocketChannel socketChannel, SelectionKey selectionKey) throws IOException {
@@ -162,6 +165,7 @@ public class RequestHandler {
         }
         System.out.println("Read answer");
         if (read == -1) {
+            System.out.println("Closing");
             socketChannel.close();
             selectionKey.cancel();
             connection.setState(State.WAIT_RESPONSE);
